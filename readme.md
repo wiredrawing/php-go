@@ -15,6 +15,7 @@ go mod init <something package name>
 上記のような内容が出力されて
 go.mod というファイルが生成されていればOKです.
 
+<something package name> => 作成するアプリケーションのトップレベルのパッケージ名を入力
 
 ## 初期化した状態で独自の任意のパッケージを作成する場合
 
