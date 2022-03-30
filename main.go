@@ -6,7 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
+	"syscall"
+	"time"
 
 	// ここは独自パッケージ
 	"go-sample/samplepackage"
@@ -27,6 +30,15 @@ var command *cobra.Command = new(cobra.Command)
 // 割り込み監視用
 var signal_chan chan os.Signal = make(chan os.Signal)
 
+// ガベージコレクションを任意の時間間隔で実行
+func regularsGabageCollection() {
+
+	for {
+		time.Sleep(5 * time.Second)
+		runtime.GC()
+	}
+}
+
 func main() {
 
 	// コンソールの監視
@@ -42,6 +54,65 @@ func main() {
 		windows.Signal(0x13),
 		windows.Signal(0x14), // Windowsの場合 SIGTSTPを認識しないためリテラルで指定する
 	)
+
+	// GCを実行
+	go regularsGabageCollection()
+
+	var exit chan int = make(chan int)
+	// 割り込み対処を実行するGoルーチン
+	go (func(exit chan int) {
+		echo := fmt.Print
+		var s os.Signal
+		for {
+			s, _ = <-signal_chan
+			if s == syscall.SIGHUP {
+				echo("[syscall.SIGHUP].\r\n")
+				// 割り込みを無視
+				exit <- 1
+			} else if s == syscall.SIGTERM {
+				echo("[syscall.SIGTERM].\r\n")
+				exit <- 2
+			} else if s == os.Kill {
+				echo("[os.Kill].\r\n")
+				// 割り込みを無視
+				exit <- 3
+			} else if s == os.Interrupt {
+				if runtime.GOOS != "darwin" {
+					echo("[os.Interrupt].\r\n")
+				}
+				// 割り込みを無視
+				exit <- 4
+			} else if s == syscall.Signal(0x14) {
+				if runtime.GOOS != "darwin" {
+					echo("[syscall.SIGTSTP].\r\n")
+				}
+				// 割り込みを無視
+				exit <- 5
+			} else if s == syscall.SIGQUIT {
+				echo("[syscall.SIGQUIT].\r\n")
+				exit <- 6
+			}
+		}
+	})(exit)
+
+	go func(exit chan int) {
+		var echo = fmt.Print
+		var code int = 0
+		for {
+			code, _ = <-exit
+
+			if code == 1 {
+				os.Exit(code)
+			} else if code == 4 {
+				echo("[Ignored interrupt].\r\n")
+			} else {
+				if runtime.GOOS != "darwin" {
+					echo("[Ignored interrupt].\r\n")
+				}
+			}
+		}
+	}(exit)
+
 	// ----------------------------------------------
 	// 標準入力を可能にする
 	// 標準入力の開始
@@ -53,7 +124,11 @@ func main() {
 		fmt.Print(" > ")
 		var isOk bool = scanner.Scan()
 		if isOk != true {
-			break
+			fmt.Println("scanner.Scan()が失敗")
+			// scannerを初期化
+			scanner = nil
+			scanner = bufio.NewScanner(os.Stdin)
+			continue
 		}
 		inputText = scanner.Text()
 		fmt.Println(inputText)
@@ -114,4 +189,47 @@ func functionForConcurrency(waiter *sync.WaitGroup) string {
 	// waitGroupをカウントダウンさせる
 	defer waiter.Done()
 	return "Return the some data you want to back"
+}
+
+// --------------------------------------------
+// 割り込み対処を実行するGoルーチン
+// コンソール上でのinterruptイベントを監視
+// --------------------------------------------
+func serveillanceInterrupt(exit chan int, observer chan os.Signal) {
+	echo := fmt.Print
+	var s os.Signal
+	for {
+		s, _ = <-signal_chan
+		if s == syscall.SIGHUP {
+			echo("[syscall.SIGHUP].\r\n")
+			// 割り込みを無視
+			exit <- 1
+		} else if s == syscall.SIGTERM {
+			echo("[syscall.SIGTERM].\r\n")
+			exit <- 2
+		} else if s == os.Kill {
+			echo("[os.Kill].\r\n")
+			// 割り込みを無視
+			exit <- 3
+		} else if s == os.Interrupt {
+			if runtime.GOOS != "darwin" {
+				echo("[os.Interrupt].\r\n")
+			}
+			// 割り込みを無視
+			exit <- 4
+		} else if s == syscall.Signal(0x14) {
+			if runtime.GOOS != "darwin" {
+				echo("[syscall.SIGTSTP].\r\n")
+			}
+			// 割り込みを無視
+			exit <- 5
+		} else if s == syscall.SIGQUIT {
+			echo("[syscall.SIGQUIT].\r\n")
+			exit <- 6
+		} else {
+			// 未定義の割り込み処理
+			echo("[Unknown syscall].\r\n")
+			exit <- -1
+		}
+	}
 }
