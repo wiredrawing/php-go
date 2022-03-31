@@ -2,31 +2,28 @@ package main
 
 import (
 	// 標準パッケージ
-	"bufio"
+
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"runtime"
 	"sync"
 	"time"
 
 	// ここは独自パッケージ
-	"go-sample/samplepackage"
-	"go-sample/wiredrawing"
 
 	// _をつけた場合は パッケージ内のinit関数のみ実行される
+	"go-sample/wiredrawing"
 	_ "go-sample/wiredrawing"
 
-	"go-sample/wiredrawing2"
-
+	"go-sample/wiredrawing/inputter"
 	"go-sample/wiredrawing/parallel"
 
-	"github.com/spf13/cobra"
 	"golang.org/x/sys/windows"
-	"rsc.io/quote"
 )
 
-var command *cobra.Command = new(cobra.Command)
+// var command *cobra.Command = new(cobra.Command)
 
 // 割り込み監視用
 var signal_chan chan os.Signal = make(chan os.Signal)
@@ -44,6 +41,42 @@ func regularsGabageCollection() {
 var fileNameToSaveInputHistory string = ".goshell.log"
 
 func main() {
+
+	// var err error = exec.Command("php", "-i").Run()
+	// output, err := exec.Command("php", "-i").Output()
+	// fmt.Println(err)
+	// fmt.Println(output)
+	// var outputString string = string(output)
+	// fmt.Println(outputString)
+
+	// コマンドの実行結果をPipeで受け取る
+	command := exec.Command("php", "-i")
+	buffer, err := command.StdoutPipe()
+
+	if err != nil {
+		panic(err)
+	}
+	command.Start()
+
+	// // StdoutPipeの実行結果のbufferを読み取る
+	// loadBuffer := func(buffer io.ReadCloser) bool {
+	// 	fmt.Println("bufferの読み取り完了------>")
+	// 	scanner := bufio.NewScanner(buffer)
+	// 	for {
+
+	// 		if scanner.Scan() == true {
+	// 			fmt.Println(scanner.Text())
+	// 			continue
+	// 		}
+	// 		// 読み取り失敗
+	// 		// fmt.Println("読み取り失敗")
+	// 		break
+	// 	}
+	// 	defer fmt.Println("bufferの読み取り完了------>")
+	// 	return true
+	// }
+	// loadBuffer(buffer)
+	wiredrawing.LoadBuffer(buffer)
 
 	// コンソールの監視
 	signal.Notify(
@@ -123,83 +156,88 @@ func main() {
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
-	scanner := bufio.NewScanner(os.Stdin)
 
-	var inputText string = ""
-	for {
-		fmt.Print("  >> ")
-		var isOk bool = scanner.Scan()
-		if isOk != true {
-			fmt.Println("scanner.Scan()が失敗")
-			// scannerを初期化
-			scanner = nil
-			scanner = bufio.NewScanner(os.Stdin)
-			continue
-		}
-		inputText = scanner.Text()
-		// 入力内容が exit ならアプリケーションを終了
-		if len(inputText) > 0 {
-			if inputText == "exit" {
-				os.Exit(1)
-			}
-			fmt.Print(" ==> ")
-			fmt.Println(inputText)
-		}
-	}
-	// 標準入力の終了
+	var waiter *sync.WaitGroup = new(sync.WaitGroup)
+	waiter.Add(1)
+	go inputter.StandByInput(waiter)
+	waiter.Wait()
+	// scanner := bufio.NewScanner(os.Stdin)
 
-	// cobraコマンドの初期化
-	command.Use = "使い方"
-	command.Short = "some descritpion"
-	command.Long = "some long description"
-	command.Run = func(cmd *cobra.Command, arguments []string) {
-		fmt.Println(arguments)
-	}
+	// var inputText string = ""
+	// for {
+	// 	fmt.Print("  >> ")
+	// 	var isOk bool = scanner.Scan()
+	// 	if isOk != true {
+	// 		fmt.Println("scanner.Scan()が失敗")
+	// 		// scannerを初期化
+	// 		scanner = nil
+	// 		scanner = bufio.NewScanner(os.Stdin)
+	// 		continue
+	// 	}
+	// 	inputText = scanner.Text()
+	// 	// 入力内容が exit ならアプリケーションを終了
+	// 	if len(inputText) > 0 {
+	// 		if inputText == "exit" {
+	// 			os.Exit(1)
+	// 		}
+	// 		fmt.Print(" ==> ")
+	// 		fmt.Println(inputText)
+	// 	}
+	// }
+	// // 標準入力の終了
 
-	// cobraの実行
-	var err error = command.Execute()
-	if err != nil {
-		fmt.Print("Some Error Happend")
-		panic(err)
-		os.Exit(-1)
-	}
-	// 外部パッケージの構造体のポインタ変数を作成する
-	var article *wiredrawing2.Article = new(wiredrawing2.Article)
-	article.SetTitle("set the title")
-	article.SetDescription("set the description")
-	fmt.Println(article)
-	wiredrawing.Print()
-	fmt.Println("test")
-	var wg sync.WaitGroup
-	fmt.Println(wg)
-	fmt.Println(quote.Hello())
+	// // cobraコマンドの初期化
+	// command.Use = "使い方"
+	// command.Short = "some descritpion"
+	// command.Long = "some long description"
+	// command.Run = func(cmd *cobra.Command, arguments []string) {
+	// 	fmt.Println(arguments)
+	// }
 
-	// execute concurrency
-	var wg2 *sync.WaitGroup = new(sync.WaitGroup)
-	var result string = functionForConcurrency(wg2)
-	fmt.Println(result)
-	wiredrawing.Print()
-	samplepackage.CallableFunctionFromOtherPackage()
+	// // cobraの実行
+	// var err error = command.Execute()
+	// if err != nil {
+	// 	fmt.Print("Some Error Happend")
+	// 	panic(err)
+	// 	os.Exit(-1)
+	// }
+	// // 外部パッケージの構造体のポインタ変数を作成する
+	// var article *wiredrawing2.Article = new(wiredrawing2.Article)
+	// article.SetTitle("set the title")
+	// article.SetDescription("set the description")
+	// fmt.Println(article)
+	// wiredrawing.Print()
+	// fmt.Println("test")
+	// var wg sync.WaitGroup
+	// fmt.Println(wg)
+	// fmt.Println(quote.Hello())
 
-	// goroutineのテスト
-	var _waiter *sync.WaitGroup = new(sync.WaitGroup)
-	echo := fmt.Println
-	_waiter.Add(1)
-	go (func(waiter *sync.WaitGroup) {
-		// waiter.Add(1)
-		echo("これはGoroutineの実行中です")
-		defer waiter.Done()
-	})(_waiter)
-	// time.Sleep(10)
-	_waiter.Wait()
+	// // execute concurrency
+	// var wg2 *sync.WaitGroup = new(sync.WaitGroup)
+	// var result string = functionForConcurrency(wg2)
+	// fmt.Println(result)
+	// wiredrawing.Print()
+	// samplepackage.CallableFunctionFromOtherPackage()
+
+	// // goroutineのテスト
+	// var _waiter *sync.WaitGroup = new(sync.WaitGroup)
+	// echo := fmt.Println
+	// _waiter.Add(1)
+	// go (func(waiter *sync.WaitGroup) {
+	// 	// waiter.Add(1)
+	// 	echo("これはGoroutineの実行中です")
+	// 	defer waiter.Done()
+	// })(_waiter)
+	// // time.Sleep(10)
+	// _waiter.Wait()
 }
 
 // --------------------------------------
 // 並行処理で実行するための関数
 // --------------------------------------
-func functionForConcurrency(waiter *sync.WaitGroup) string {
-	waiter.Add(1)
-	// waitGroupをカウントダウンさせる
-	defer waiter.Done()
-	return "Return the some data you want to back"
-}
+// func functionForConcurrency(waiter *sync.WaitGroup) string {
+// 	waiter.Add(1)
+// 	// waitGroupをカウントダウンさせる
+// 	defer waiter.Done()
+// 	return "Return the some data you want to back"
+// }
