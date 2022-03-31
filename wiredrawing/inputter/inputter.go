@@ -10,8 +10,24 @@ import (
 // 入力用ポインタ
 var scanner *bufio.Scanner
 
+var logFile string = ".log.dat"
+
+// 改行文字を定義
+const newLine string = "\n"
+
 // 標準入力を待ち受ける関数
 func StandByInput(waiter *sync.WaitGroup) {
+
+	// 標準入力の内容を保存する用のファイルポインタを作成
+	var file *os.File
+	var err error
+	file, err = os.Create(logFile)
+	if err != nil {
+		panic(err)
+	}
+
+	// 遅延実行
+	defer file.Close()
 
 	// ----------------------------------------------
 	// 標準入力を可能にする
@@ -36,11 +52,18 @@ func StandByInput(waiter *sync.WaitGroup) {
 			if inputText == "exit" {
 				waiter.Done()
 				// os.Exit(1)
+			} else if inputText == "clear" || inputText == "refresh" {
+				// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
+				// ファイルサイズを空にする
+				err = os.Truncate(logFile, 0)
+				file.Seek(0, 0)
+			} else {
+				fmt.Print(" ==> ")
+				fmt.Println(inputText)
+				// ファイルポインタへ書き込み
+				file.WriteString(inputText + newLine)
 			}
-			fmt.Print(" ==> ")
-			fmt.Println(inputText)
 		}
 	}
 	// 標準入力の終了
-
 }
