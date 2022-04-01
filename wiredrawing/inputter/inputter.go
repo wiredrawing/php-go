@@ -3,7 +3,9 @@ package inputter
 import (
 	"bufio"
 	"fmt"
+	"go-sample/wiredrawing"
 	"os"
+	"os/exec"
 	"sync"
 )
 
@@ -18,6 +20,9 @@ const newLine string = "\n"
 // 標準入力を待ち受ける関数
 func StandByInput(waiter *sync.WaitGroup) {
 
+	var command *exec.Cmd
+	var previousLine *int
+	*previousLine = 0
 	// 標準入力の内容を保存する用のファイルポインタを作成
 	var file *os.File
 	var err error
@@ -25,6 +30,9 @@ func StandByInput(waiter *sync.WaitGroup) {
 	if err != nil {
 		panic(err)
 	}
+
+	// phpの<?phpタグを記述する
+	file.WriteString("<?php " + "\n")
 
 	// 遅延実行
 	defer file.Close()
@@ -58,10 +66,19 @@ func StandByInput(waiter *sync.WaitGroup) {
 				err = os.Truncate(logFile, 0)
 				file.Seek(0, 0)
 			} else {
-				fmt.Print(" ==> ")
-				fmt.Println(inputText)
+				// プログラムの実行処理
 				// ファイルポインタへ書き込み
 				file.WriteString(inputText + newLine)
+				command = exec.Command("php", logFile)
+				fmt.Println(command)
+				buffer, err := command.StdoutPipe()
+
+				if err != nil {
+					panic(err)
+				}
+				// bufferの読み取り開始
+				command.Start()
+				wiredrawing.LoadBuffer(buffer, previousLine)
 			}
 		}
 	}

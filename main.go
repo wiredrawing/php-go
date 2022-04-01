@@ -40,8 +40,11 @@ func regularsGabageCollection() {
 // 入力内容を保持するための履歴ファイル
 var fileNameToSaveInputHistory string = ".goshell.log"
 
+var previousLine *int
+
 func main() {
 
+	*previousLine = 0
 	// var err error = exec.Command("php", "-i").Run()
 	// output, err := exec.Command("php", "-i").Output()
 	// fmt.Println(err)
@@ -76,7 +79,7 @@ func main() {
 	// 	return true
 	// }
 	// loadBuffer(buffer)
-	wiredrawing.LoadBuffer(buffer)
+	wiredrawing.LoadBuffer(buffer, previousLine)
 
 	// コンソールの監視
 	signal.Notify(
