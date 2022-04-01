@@ -70,6 +70,8 @@ func StandByInput(waiter *sync.WaitGroup) {
 				// プログラムの実行処理
 				// ファイルポインタへ書き込み
 				file.WriteString(inputText + newLine)
+				// phpでの改行を追加する
+				file.WriteString("echo(PHP_EOL);")
 				command = exec.Command("php", logFile)
 				fmt.Println(command)
 				buffer, err := command.StdoutPipe()

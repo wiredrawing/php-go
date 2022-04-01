@@ -39,7 +39,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 			continue
 		}
 		// 過去の出力内容は破棄する
-		if *previousLine <= currentLine {
+		if *previousLine < currentLine {
 			fmt.Println(loadedBuffer)
 		}
 		continue
