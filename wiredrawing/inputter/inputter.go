@@ -17,11 +17,12 @@ var logFile string = ".log.dat"
 // 改行文字を定義
 const newLine string = "\n"
 
+var command *exec.Cmd
+var previousLine *int = new(int)
+
 // 標準入力を待ち受ける関数
 func StandByInput(waiter *sync.WaitGroup) {
 
-	var command *exec.Cmd
-	var previousLine *int
 	*previousLine = 0
 	// 標準入力の内容を保存する用のファイルポインタを作成
 	var file *os.File

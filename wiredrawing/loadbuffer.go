@@ -16,7 +16,7 @@ var currentLine int
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // ---------------------------------------------------------------------
 func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
-	fmt.Println("bufferの読み取り開始------>")
+	// fmt.Println("bufferの読み取り開始------>")
 	currentLine = 0
 
 	// 前回の実行改行回数がnilなら0を代入
@@ -44,7 +44,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 		}
 		continue
 	}
-	defer fmt.Println("bufferの読み取り完了------>")
+	// defer fmt.Println("bufferの読み取り完了------>")
 	*previousLine = currentLine
 	return true, nil
 }

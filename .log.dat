@@ -1,4 +1,0 @@
-<?php 
-var_dump(phpversion());
-phpinfo();
-print_r($_ENV);
