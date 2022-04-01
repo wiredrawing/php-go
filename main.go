@@ -41,7 +41,6 @@ var previousLine *int = new(int)
 
 func main() {
 
-	fmt.Println("0")
 	*previousLine = 0
 
 	// コマンドの実行結果をPipeで受け取る
@@ -53,9 +52,8 @@ func main() {
 	}
 	command.Start()
 
-	fmt.Println("1")
 	wiredrawing.LoadBuffer(buffer, previousLine)
-	fmt.Println("2")
+
 	// コンソールの監視
 	signal.Notify(
 		signal_chan,
@@ -78,7 +76,7 @@ func main() {
 	go parallel.InterruptProcess(exit, signal_chan)
 
 	go func(exit chan int) {
-		var echo = fmt.Print
+		// var echo = fmt.Print
 		var code int = 0
 		for {
 			code, _ = <-exit
@@ -86,10 +84,10 @@ func main() {
 			if code == 1 {
 				os.Exit(code)
 			} else if code == 4 {
-				echo("[Ignored interrupt].\r\n")
+				fmt.Print("[Ignored interrupt].\r\n")
 			} else {
 				if runtime.GOOS != "darwin" {
-					echo("[Ignored interrupt].\r\n")
+					fmt.Print("[Ignored interrupt].\r\n")
 				}
 			}
 		}

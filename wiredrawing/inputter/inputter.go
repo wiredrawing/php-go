@@ -72,8 +72,18 @@ func StandByInput(waiter *sync.WaitGroup) {
 				file.WriteString(inputText + newLine)
 				// phpでの改行を追加する
 				file.WriteString("echo(PHP_EOL);")
+
+				// 一旦入力内容が正しく終了するかどうかを検証
 				command = exec.Command("php", logFile)
-				fmt.Println(command)
+				command.Run()
+				exitCode := command.ProcessState.ExitCode()
+				// 終了コードが0でない場合は何かしらのエラー
+				if exitCode != 0 {
+					panic("phpコマンドの実行に失敗")
+				}
+
+				command = exec.Command("php", logFile)
+				// fmt.Println(command)
 				buffer, err := command.StdoutPipe()
 
 				if err != nil {
