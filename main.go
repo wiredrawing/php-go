@@ -5,16 +5,13 @@ import (
 
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime"
-	"sync"
-	"time"
 
 	// ここは独自パッケージ
 
 	// _をつけた場合は パッケージ内のinit関数のみ実行される
-	"go-sample/wiredrawing"
+
 	_ "go-sample/wiredrawing"
 
 	"go-sample/wiredrawing/inputter"
@@ -31,28 +28,43 @@ var signal_chan chan os.Signal = make(chan os.Signal)
 // ガベージコレクションを任意の時間間隔で実行
 func regularsGabageCollection() {
 
-	for {
-		time.Sleep(5 * time.Second)
-		runtime.GC()
-	}
-}
+	// var mem runtime.MemStats
+	// for {
 
-var previousLine *int = new(int)
+	// 	runtime.ReadMemStats(&mem)
+	// 	// fmt.Printf("(1)Alloc:%d, (2)TotalAlloc:%d, (3)Sys:%d, (4)HeapAlloc:%d, (5)HeapSys:%d, (6)HeapReleased:%d\r\n",
+	// 	// 	mem.Alloc, // HeapAllocと同値
+	// 	// 	mem.TotalAlloc,
+	// 	// 	mem.Sys,       // OSから得た合計バイト数
+	// 	// 	mem.HeapAlloc, // Allocと同値
+	// 	// 	mem.HeapSys,
+	// 	// 	mem.HeapReleased, // OSへ返却されたヒープ
+	// 	// )
+	// 	// time.Sleep(5 * time.Second)
+	// 	// // fmt.Println("Executed gc")
+	// 	// runtime.GC()
+	// 	// debug.FreeOSMemory()
+	// 	// if mem.Alloc > 3000000 {
+	// 	// 	runtime.GC()
+	// 	// 	debug.FreeOSMemory()
+	// 	// }
+	// }
+}
 
 func main() {
 
-	*previousLine = 0
+	// *previousLine = 0
 
-	// コマンドの実行結果をPipeで受け取る
-	command := exec.Command("php", "-i")
-	buffer, err := command.StdoutPipe()
+	// // コマンドの実行結果をPipeで受け取る
+	// command := exec.Command("php", "-i")
+	// buffer, err := command.StdoutPipe()
 
-	if err != nil {
-		panic(err)
-	}
-	command.Start()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// command.Start()
 
-	wiredrawing.LoadBuffer(buffer, previousLine)
+	// wiredrawing.LoadBuffer(buffer, previousLine)
 
 	// コンソールの監視
 	signal.Notify(
@@ -97,10 +109,9 @@ func main() {
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
-
-	var waiter *sync.WaitGroup = new(sync.WaitGroup)
-	waiter.Add(1)
-	go inputter.StandByInput(waiter)
-	waiter.Wait()
-
+	// var waiter *sync.WaitGroup = new(sync.WaitGroup)
+	// waiter.Add(1)
+	// go inputter.StandByInput(waiter)
+	// waiter.Wait()
+	inputter.StandByInput()
 }

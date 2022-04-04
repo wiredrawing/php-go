@@ -4,15 +4,19 @@ import (
 	"bufio"
 	"fmt"
 	"go-sample/wiredrawing"
+	"io/ioutil"
 	"os"
 	"os/exec"
-	"sync"
+	"runtime"
+	"runtime/debug"
 )
 
 // 入力用ポインタ
 var scanner *bufio.Scanner
 
-var logFile string = ".log.dat"
+var ngFile string = ".validation.dat"
+
+var okFile string = ".success.dat"
 
 // 改行文字を定義
 const newLine string = "\n"
@@ -20,33 +24,53 @@ const newLine string = "\n"
 var command *exec.Cmd
 var previousLine *int = new(int)
 
-// 標準入力を待ち受ける関数
-func StandByInput(waiter *sync.WaitGroup) {
+// 入力内容を保持する変数
+var inputText string = ""
 
-	*previousLine = 0
-	// 標準入力の内容を保存する用のファイルポインタを作成
-	var file *os.File
-	var err error
-	file, err = os.Create(logFile)
+var file1 *os.File
+var file2 *os.File
+
+var err error
+
+// ----------------------------------------------//
+// パッケージの初期化
+// init関数は値を返却できない
+// ----------------------------------------------
+func init() {
+	// 入力内容のコマンド結果確認用
+	file1, err = os.Create(ngFile)
 	if err != nil {
 		panic(err)
 	}
-
 	// phpの<?phpタグを記述する
-	file.WriteString("<?php " + "\n")
+	file1.WriteString("<?php " + "\n")
+
+	// 実際の実行ファイル用
+	file2, err = os.Create(okFile)
+	if err != nil {
+		panic(err)
+	}
+	// phpの<?phpタグを記述する
+	file2.WriteString("<?php " + "\n")
+}
+
+// 標準入力を待ち受ける関数
+func StandByInput() {
+
+	*previousLine = 0
 
 	// 遅延実行
-	defer file.Close()
+	defer file1.Close()
+	defer file2.Close()
 
 	// ----------------------------------------------
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
 	scanner = bufio.NewScanner(os.Stdin)
-
-	var inputText string = ""
+	var prompt string = " >> "
 	for {
-		fmt.Print("  >> ")
+		fmt.Print(prompt)
 		var isOk bool = scanner.Scan()
 		if isOk != true {
 			fmt.Println("scanner.Scan()が失敗")
@@ -57,43 +81,105 @@ func StandByInput(waiter *sync.WaitGroup) {
 		}
 		inputText = scanner.Text()
 		// 入力内容が exit ならアプリケーションを終了
-		if len(inputText) > 0 {
-			if inputText == "exit" {
-				waiter.Done()
-				// os.Exit(1)
-			} else if inputText == "clear" || inputText == "refresh" {
-				// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
-				// ファイルサイズを空にする
-				err = os.Truncate(logFile, 0)
-				file.Seek(0, 0)
-			} else {
-				// プログラムの実行処理
-				// ファイルポインタへ書き込み
-				file.WriteString(inputText + newLine)
-				// phpでの改行を追加する
-				file.WriteString("echo(PHP_EOL);")
+		if len(inputText) == 0 {
+			continue
+		}
 
-				// 一旦入力内容が正しく終了するかどうかを検証
-				command = exec.Command("php", logFile)
-				command.Run()
-				exitCode := command.ProcessState.ExitCode()
-				// 終了コードが0でない場合は何かしらのエラー
-				if exitCode != 0 {
-					panic("phpコマンドの実行に失敗")
-				}
+		// ---------------------------------------------
+		// exitコマンドの場合はシェルを終了
+		// ---------------------------------------------
+		if inputText == "exit" {
+			os.Exit(1)
+			break
+		}
+		// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
+		// ファイルサイズを空にする
+		if inputText == "clear" || inputText == "refresh" {
+			// phpスクリプトチェック用ファイルを殻にする
+			os.Truncate(ngFile, 0)
+			file1.Seek(0, 0)
+			f, err := os.Open(okFile)
+			if err != nil {
+				panic(err)
+			}
+			source, err := ioutil.ReadAll(f)
+			if err != nil {
+				panic(err)
+			}
+			file1.WriteString(string(source))
+			prompt = " >> "
+			runtime.GC()
+			debug.FreeOSMemory()
+			continue
+		}
 
-				command = exec.Command("php", logFile)
-				// fmt.Println(command)
-				buffer, err := command.StdoutPipe()
+		// cat と入力すると現在まで入力している内容を出力する
+		if inputText == "cat" {
 
+			(func() {
+				catFile, err := os.Open(ngFile)
 				if err != nil {
 					panic(err)
 				}
-				// bufferの読み取り開始
-				command.Start()
-				wiredrawing.LoadBuffer(buffer, previousLine)
-			}
+				tempScanner := bufio.NewScanner(catFile)
+
+				var index int = 0
+				var indexStr string = ""
+				for tempScanner.Scan() {
+					indexStr = fmt.Sprintf("%03d", index)
+					fmt.Print(indexStr + ": ")
+					fmt.Println(tempScanner.Text())
+					index++
+				}
+			})()
+
+			continue
 		}
+
+		// プログラムの実行処理
+		// ファイルポインタへ書き込み
+		file1.WriteString(inputText + newLine)
+		// phpでの改行を追加する
+		// file.WriteString("echo(PHP_EOL);")
+
+		// 一旦入力内容が正しく終了するかどうかを検証
+		command = exec.Command("php", ngFile)
+		command.Run()
+		exitCode := command.ProcessState.ExitCode()
+
+		// --------------------------------------------
+		// 終了コードが0でない場合は何かしらのエラー
+		// あるいは入力途中とする
+		// --------------------------------------------
+		if exitCode != 0 {
+			prompt = " ... "
+			continue
+		}
+		prompt = " >> "
+
+		// 正常終了の場合は ngFile中身をokFileにコピー
+		f, err := os.Open(ngFile)
+		if err != nil {
+			panic(err)
+		}
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			panic(err)
+		}
+		os.Truncate(okFile, 0)
+		file2.Seek(0, 0)
+		file2.WriteString(string(b))
+		command = exec.Command("php", okFile)
+		// fmt.Println(command)
+		buffer, err := command.StdoutPipe()
+
+		if err != nil {
+			panic(err)
+		}
+		// bufferの読み取り開始
+		command.Start()
+		wiredrawing.LoadBuffer(buffer, previousLine)
+		fmt.Println("")
 	}
 	// 標準入力の終了
 }

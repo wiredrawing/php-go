@@ -19,32 +19,25 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 	// fmt.Println("bufferの読み取り開始------>")
 	currentLine = 0
 
-	// 前回の実行改行回数がnilなら0を代入
-	if previousLine == nil {
-		*previousLine = currentLine
-	}
-	scanner = bufio.NewScanner(buffer)
 	for {
-		// 読み取りが失敗した場合ループを抜ける
-		if scanner.Scan() != true {
-			// 読み取り失敗
-			// fmt.Println("読み取り失敗")
+		readData := make([]byte, 1)
+		n, err := buffer.Read(readData)
+
+		if err != nil {
+			// fmt.Println(err)
 			break
 		}
 
-		// 改行をカウントする
+		if n == 0 {
+			break
+		}
+		if currentLine >= *previousLine {
+			fmt.Print(string(readData))
+		}
 		currentLine++
-		loadedBuffer = scanner.Text()
-		if len(loadedBuffer) == 0 {
-			continue
-		}
-		// 過去の出力内容は破棄する
-		if *previousLine < currentLine {
-			fmt.Println(loadedBuffer)
-		}
-		continue
+		readData = nil
 	}
-	// defer fmt.Println("bufferの読み取り完了------>")
 	*previousLine = currentLine
+
 	return true, nil
 }
