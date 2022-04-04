@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"strings"
 )
 
 // 入力用ポインタ
@@ -92,6 +93,35 @@ func StandByInput() {
 			os.Exit(1)
 			break
 		}
+
+		// ---------------------------------------------
+		// スペースで分割して delete indexNumber を取り出す
+		// ---------------------------------------------
+		tokens := strings.Split(inputText, " ")
+		if tokens[0] == "delete" {
+			{
+				var fileBuffer []string
+				file, err := os.Open(ngFile)
+				if err != nil {
+					panic(err)
+				}
+				scanner := bufio.NewScanner(file)
+				for scanner.Scan() {
+					{
+						fileBuffer = append(fileBuffer, scanner.Text())
+					}
+				}
+				fmt.Println(fileBuffer)
+				// deleteコマンド入力時 入力した内容を削除していく
+
+				// fmt.Println(tokens)
+				// for index, token := range tokens {
+				// 	fmt.Println(fmt.Sprintf("%d", index) + ":" + token)
+				// }
+			}
+
+		}
+
 		// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
 		// ファイルサイズを空にする
 		if inputText == "clear" || inputText == "refresh" {
