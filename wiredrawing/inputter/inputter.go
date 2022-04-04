@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 )
 
@@ -71,6 +72,8 @@ func StandByInput() {
 	scanner = bufio.NewScanner(os.Stdin)
 	var prompt string = " >> "
 	for {
+		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
+		file2, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
 		fmt.Print(prompt)
 		var isOk bool = scanner.Scan()
 		if isOk != true {
@@ -100,6 +103,8 @@ func StandByInput() {
 		tokens := strings.Split(inputText, " ")
 		if tokens[0] == "delete" {
 			{
+				file1.Close()
+				file2.Close()
 				var fileBuffer []string
 				file, err := os.Open(ngFile)
 				if err != nil {
@@ -111,13 +116,51 @@ func StandByInput() {
 						fileBuffer = append(fileBuffer, scanner.Text())
 					}
 				}
-				fmt.Println(fileBuffer)
-				// deleteコマンド入力時 入力した内容を削除していく
+				var indexToDelete int
+				indexToDelete, err = strconv.Atoi(tokens[1])
+				if err != nil {
+					panic(err)
+				}
 
-				// fmt.Println(tokens)
-				// for index, token := range tokens {
-				// 	fmt.Println(fmt.Sprintf("%d", index) + ":" + token)
-				// }
+				fileBuffer = append(fileBuffer[:indexToDelete], fileBuffer[indexToDelete+1:]...)
+				file.Close()
+
+				// validation用ファイルを空に
+				file1.Close()
+				os.Truncate(ngFile, 0)
+				file, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
+				if err != nil {
+					panic(err)
+				}
+				file.Seek(0, 0)
+				for _, value := range fileBuffer {
+					// 行末に改行文字を入力
+					_, err := file.WriteString(value + "\n")
+					if err != nil {
+						panic(err)
+					}
+				}
+				file.Close()
+
+				// 実行用用ファイルを空に
+				// ngFile => okFile に内容をコピ
+				file2.Close()
+				os.Truncate(okFile, 0)
+				file, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
+				if err != nil {
+					panic(err)
+				}
+				file.Seek(0, 0)
+				for _, value := range fileBuffer {
+					// 行末に改行文字を入力
+					_, err := file.WriteString(value + "\n")
+					if err != nil {
+						panic(err)
+					}
+				}
+				file.Close()
+
+				continue
 			}
 
 		}
