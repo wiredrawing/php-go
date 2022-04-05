@@ -12,10 +12,10 @@ import (
 
 	// _をつけた場合は パッケージ内のinit関数のみ実行される
 
-	_ "go-sample/wiredrawing"
+	_ "php-go/wiredrawing"
 
-	"go-sample/wiredrawing/inputter"
-	"go-sample/wiredrawing/parallel"
+	"php-go/wiredrawing/inputter"
+	"php-go/wiredrawing/parallel"
 
 	"golang.org/x/sys/windows"
 )

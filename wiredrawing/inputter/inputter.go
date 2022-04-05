@@ -3,10 +3,10 @@ package inputter
 import (
 	"bufio"
 	"fmt"
-	"go-sample/wiredrawing"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"php-go/wiredrawing"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -45,7 +45,8 @@ func init() {
 		panic(err)
 	}
 	// phpの<?phpタグを記述する
-	file1.WriteString("<?php " + "\n")
+	fmt.Fprintln(file1, "<?php ")
+	// file1.WriteString("<?php " + "\n")
 
 	// 実際の実行ファイル用
 	file2, err = os.Create(okFile)
@@ -53,7 +54,8 @@ func init() {
 		panic(err)
 	}
 	// phpの<?phpタグを記述する
-	file2.WriteString("<?php " + "\n")
+	fmt.Fprintln(file2, "<?php ")
+	// file2.WriteString("<?php " + "\n")
 }
 
 // 標準入力を待ち受ける関数
@@ -88,13 +90,31 @@ func StandByInput() {
 		if len(inputText) == 0 {
 			continue
 		}
+		// 両端のスペースを削除
+		inputText = strings.TrimSpace(inputText)
 
 		// ---------------------------------------------
 		// exitコマンドの場合はシェルを終了
 		// ---------------------------------------------
 		if inputText == "exit" {
-			os.Exit(1)
-			break
+			// コンソールを終了するための標準入力を取得する
+			{
+				fmt.Println("Do you really want to finish?  Y / y , No / other")
+				toExit := bufio.NewScanner(os.Stdin)
+				isOk := toExit.Scan()
+				if isOk != true {
+					// 標準入力からの読み取り失敗時
+					fmt.Println("Could not take a string you input.")
+					fmt.Println("Please input the word \"exit\".")
+					continue
+				}
+				inputText = toExit.Text()
+				if inputText == "y" {
+					os.Exit(1)
+					break
+				}
+				continue
+			}
 		}
 
 		// ---------------------------------------------
@@ -116,12 +136,18 @@ func StandByInput() {
 						fileBuffer = append(fileBuffer, scanner.Text())
 					}
 				}
+				// 削除したい対象の行数を取得する
 				var indexToDelete int
 				indexToDelete, err = strconv.Atoi(tokens[1])
 				if err != nil {
 					panic(err)
 				}
 
+				// 指定したindexがスライスの範囲内かどうかを検証
+				if (len(fileBuffer) > indexToDelete) != true {
+					fmt.Println("範囲外のindexが指定されました")
+					continue
+				}
 				fileBuffer = append(fileBuffer[:indexToDelete], fileBuffer[indexToDelete+1:]...)
 				file.Close()
 
@@ -160,6 +186,16 @@ func StandByInput() {
 				}
 				file.Close()
 
+				// 再度削除したphpファイルを実行して古いバッファを捨てる
+				command := exec.Command("php", okFile)
+				buffer, err := command.StdoutPipe()
+				if err != nil {
+					panic(err)
+				}
+				command.Start()
+				*previousLine = 0
+				wiredrawing.LoadBuffer(buffer, previousLine)
+				fmt.Println("")
 				continue
 			}
 
