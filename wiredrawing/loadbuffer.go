@@ -20,8 +20,8 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 	// fmt.Println("bufferの読み取り開始------>")
 	currentLine = 0
 
-	var ensureLength = 1024
-	fmt.Println("*previousLine", *previousLine)
+	var ensureLength = 32
+	// fmt.Println("*previousLine", *previousLine)
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
@@ -34,10 +34,13 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 			break
 		}
 
+		from := currentLine
+		to := currentLine + n
 		if (currentLine + n) >= *previousLine {
-
-			if currentLine < *previousLine && *previousLine < (currentLine+n) {
-				fmt.Print(string(readData[(*previousLine - currentLine):]))
+			if from < *previousLine && *previousLine <= to {
+				diff := *previousLine - currentLine
+				tempSlice := readData[diff:]
+				fmt.Print(string(tempSlice))
 			} else {
 				fmt.Print(string(readData))
 			}
