@@ -32,6 +32,8 @@ var inputText string = ""
 var file1 *os.File
 var file2 *os.File
 
+// 一番最後に実行されたPHPコマンドの エラーメッセージを保持
+var lastErrorMessage []byte = make([]byte, 0, 512)
 var err error
 
 // ----------------------------------------------//
@@ -59,7 +61,7 @@ func init() {
 }
 
 // 標準入力を待ち受ける関数
-func StandByInput() {
+func StandByInput() (bool, error) {
 
 	*previousLine = 0
 
@@ -86,12 +88,12 @@ func StandByInput() {
 			continue
 		}
 		inputText = scanner.Text()
+		// 両端のスペースを削除
+		inputText = strings.TrimSpace(inputText)
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
 			continue
 		}
-		// 両端のスペースを削除
-		inputText = strings.TrimSpace(inputText)
 
 		// ---------------------------------------------
 		// exitコマンドの場合はシェルを終了
@@ -99,7 +101,7 @@ func StandByInput() {
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 			{
-				fmt.Println("Do you really want to finish?  Y / y , No / other")
+				fmt.Println("Do you really want to finish?  Y / yes , No / other")
 				toExit := bufio.NewScanner(os.Stdin)
 				isOk := toExit.Scan()
 				if isOk != true {
@@ -110,7 +112,11 @@ func StandByInput() {
 				}
 				// 両端のスペースを削除
 				inputText = strings.TrimSpace(toExit.Text())
-				if inputText == "y" {
+				if inputText == "yes" {
+					// 終了メッセージを表示
+					// string型を[]byteに変換して書き込み
+					var messageToEnd []byte = []byte("Thank you for using me! Good by.")
+					os.Stdout.Write(messageToEnd)
 					os.Exit(1)
 					break
 				}
@@ -253,8 +259,11 @@ func StandByInput() {
 		// phpでの改行を追加する
 		// file.WriteString("echo(PHP_EOL);")
 
+		// --------------------------------------------
 		// 一旦入力内容が正しく終了するかどうかを検証
+		// --------------------------------------------
 		command = exec.Command("php", ngFile)
+
 		command.Run()
 		exitCode := command.ProcessState.ExitCode()
 
@@ -263,12 +272,15 @@ func StandByInput() {
 		// あるいは入力途中とする
 		// --------------------------------------------
 		if exitCode != 0 {
+			lastErrorMessage, err = exec.Command("php", ngFile).Output()
 			prompt = " ... "
 			continue
 		}
 		prompt = " >> "
 
+		// --------------------------------------------
 		// 正常終了の場合は ngFile中身をokFileにコピー
+		// --------------------------------------------
 		f, err := os.Open(ngFile)
 		if err != nil {
 			panic(err)
@@ -293,4 +305,6 @@ func StandByInput() {
 		fmt.Println("")
 	}
 	// 標準入力の終了
+
+	return true, nil
 }
