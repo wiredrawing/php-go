@@ -108,7 +108,8 @@ func StandByInput() {
 					fmt.Println("Please input the word \"exit\".")
 					continue
 				}
-				inputText = toExit.Text()
+				// 両端のスペースを削除
+				inputText = strings.TrimSpace(toExit.Text())
 				if inputText == "y" {
 					os.Exit(1)
 					break
@@ -121,6 +122,7 @@ func StandByInput() {
 		// スペースで分割して delete indexNumber を取り出す
 		// ---------------------------------------------
 		tokens := strings.Split(inputText, " ")
+
 		if tokens[0] == "delete" {
 			{
 				file1.Close()
