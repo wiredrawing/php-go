@@ -25,7 +25,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
-
+		readData = readData[:n]
 		if err != nil {
 			break
 		}
