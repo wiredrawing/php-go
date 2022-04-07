@@ -74,7 +74,7 @@ func StandByInput() (bool, error) {
 	// 標準入力の開始
 	// ----------------------------------------------
 	scanner = bufio.NewScanner(os.Stdin)
-	var prompt string = " >> "
+	var prompt string = " >>> "
 	for {
 		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
 		file2, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
@@ -224,7 +224,7 @@ func StandByInput() (bool, error) {
 				panic(err)
 			}
 			file1.WriteString(string(source))
-			prompt = " >> "
+			prompt = " >>> "
 			runtime.GC()
 			debug.FreeOSMemory()
 			continue
@@ -276,7 +276,7 @@ func StandByInput() (bool, error) {
 			prompt = " ... "
 			continue
 		}
-		prompt = " >> "
+		prompt = " >>> "
 
 		// --------------------------------------------
 		// 正常終了の場合は ngFile中身をokFileにコピー
