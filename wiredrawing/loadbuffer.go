@@ -40,10 +40,8 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 			if from < *previousLine && *previousLine <= to {
 				diff := *previousLine - currentLine
 				tempSlice := readData[diff:]
-				// fmt.Print(string(tempSlice))
 				fmt.Fprint(os.Stdout, string(tempSlice))
 			} else {
-				// fmt.Print(string(readData))
 				fmt.Fprint(os.Stdout, string(readData))
 			}
 		}
