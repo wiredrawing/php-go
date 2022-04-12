@@ -117,23 +117,31 @@ func StandByInput() (bool, error) {
 			// コンソールを終了するための標準入力を取得する
 			{
 				fmt.Println("Do you really want to finish?  yes / y or Y or yes  , No / other")
-				toExit := bufio.NewScanner(os.Stdin)
-				isOk := toExit.Scan()
-				if isOk != true {
+
+				// toExit := bufio.NewScanner(os.Stdin)
+				// isOk := toExit.Scan()
+				// if isOk != true {
+				// 	// 標準入力からの読み取り失敗時
+				// 	fmt.Println("Could not take a string you input.")
+				// 	fmt.Println("Please input the word \"exit\".")
+				// 	continue
+				// }
+
+				// 両端のスペースを削除
+				var inputText string = wiredrawing.StdInput()
+				inputText = strings.TrimSpace(inputText)
+				if len(inputText) == 0 {
 					// 標準入力からの読み取り失敗時
 					fmt.Println("Could not take a string you input.")
 					fmt.Println("Please input the word \"exit\".")
 					continue
 				}
-				// 両端のスペースを削除
-				inputText = strings.TrimSpace(toExit.Text())
-				if wiredrawing.InArray(inputText, wordsToExit) == true {
+				if wiredrawing.InArray(inputText, wordsToExit) {
 					// 終了メッセージを表示
 					// string型を[]byteに変換して書き込み
 					var messageToEnd []byte = []byte("Thank you for using me! Good by.")
 					os.Stdout.Write(messageToEnd)
 					os.Exit(1)
-					break
 				}
 				continue
 			}
