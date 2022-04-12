@@ -36,6 +36,9 @@ var file2 *os.File
 var lastErrorMessage []byte = make([]byte, 0, 512)
 var err error
 
+// ターミナルを終了させるためのキーワード群
+var wordsToExit []string = make([]string, 0, 32)
+
 // ----------------------------------------------//
 // パッケージの初期化
 // init関数は値を返却できない
@@ -58,6 +61,11 @@ func init() {
 	// phpの<?phpタグを記述する
 	fmt.Fprintln(file2, "<?php ")
 	// file2.WriteString("<?php " + "\n")
+
+	// ターミナル終了キーワードを設定
+	wordsToExit = append(wordsToExit, "y")
+	wordsToExit = append(wordsToExit, "Y")
+	wordsToExit = append(wordsToExit, "yes")
 }
 
 // 標準入力を待ち受ける関数
@@ -77,11 +85,17 @@ func StandByInput() (bool, error) {
 	var prompt string = " >>> "
 	for {
 		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
+		if err != nil {
+			panic(err)
+		}
 		file2, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
+		if err != nil {
+			panic(err)
+		}
 		fmt.Print(prompt)
 		var isOk bool = scanner.Scan()
 		if isOk != true {
-			fmt.Println("scanner.Scan()が失敗")
+			fmt.Println("Failed executing the command named scanner.Scan().")
 			// scannerを初期化
 			scanner = nil
 			scanner = bufio.NewScanner(os.Stdin)
@@ -101,7 +115,7 @@ func StandByInput() (bool, error) {
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 			{
-				fmt.Println("Do you really want to finish?  Y / yes , No / other")
+				fmt.Println("Do you really want to finish?  yes / y or Y or yes  , No / other")
 				toExit := bufio.NewScanner(os.Stdin)
 				isOk := toExit.Scan()
 				if isOk != true {
@@ -112,7 +126,7 @@ func StandByInput() (bool, error) {
 				}
 				// 両端のスペースを削除
 				inputText = strings.TrimSpace(toExit.Text())
-				if inputText == "yes" {
+				if wiredrawing.InArray(inputText, wordsToExit) == true {
 					// 終了メッセージを表示
 					// string型を[]byteに変換して書き込み
 					var messageToEnd []byte = []byte("Thank you for using me! Good by.")
