@@ -12,8 +12,6 @@ import (
 
 	// _をつけた場合は パッケージ内のinit関数のみ実行される
 
-	_ "php-go/wiredrawing"
-
 	"php-go/wiredrawing/inputter"
 	"php-go/wiredrawing/parallel"
 
@@ -91,7 +89,7 @@ func main() {
 		// var echo = fmt.Print
 		var code int = 0
 		for {
-			code, _ = <-exit
+			code = <-exit
 
 			if code == 1 {
 				os.Exit(code)

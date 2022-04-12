@@ -93,17 +93,18 @@ func StandByInput() (bool, error) {
 			panic(err)
 		}
 		fmt.Print(prompt)
-		var isOk bool = scanner.Scan()
-		if isOk != true {
-			fmt.Println("Failed executing the command named scanner.Scan().")
-			// scannerを初期化
-			scanner = nil
-			scanner = bufio.NewScanner(os.Stdin)
-			continue
-		}
-		inputText = scanner.Text()
+		// var isOk bool = scanner.Scan()
+		// if isOk != true {
+		// 	fmt.Println("Failed executing the command named scanner.Scan().")
+		// 	// scannerを初期化
+		// 	scanner = nil
+		// 	scanner = bufio.NewScanner(os.Stdin)
+		// 	continue
+		// }
+		// inputText = scanner.Text()
+
 		// 両端のスペースを削除
-		inputText = strings.TrimSpace(inputText)
+		inputText = strings.TrimSpace(wiredrawing.StdInput())
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
 			continue

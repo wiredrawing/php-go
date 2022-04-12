@@ -16,3 +16,18 @@ func InArray(needle string, haystack []string) bool {
 
 	return false
 }
+
+// ------------------------------------------------
+// PHPのarray_search関数をシミュレーション
+// 第一引数にマッチする要素のキーを返却
+// 要素が対象のスライス内に存在しない場合は-1
+// ------------------------------------------------
+func ArraySearch(needle string, haystack []string) int {
+
+	for index, value := range haystack {
+		if value == needle {
+			return index
+		}
+	}
+	return -1
+}
