@@ -141,7 +141,7 @@ func StandByInput() (bool, error) {
 					// string型を[]byteに変換して書き込み
 					var messageToEnd []byte = []byte("Thank you for using me! Good by.")
 					os.Stdout.Write(messageToEnd)
-					os.Exit(1)
+					break
 				}
 				continue
 			}
@@ -225,7 +225,8 @@ func StandByInput() (bool, error) {
 				}
 				command.Start()
 				*previousLine = 0
-				wiredrawing.LoadBuffer(buffer, previousLine)
+				// 第三引数にfalseを与えて,実行結果の出力を破棄する
+				wiredrawing.LoadBuffer(buffer, previousLine, false)
 				fmt.Println("")
 				continue
 			}
@@ -278,7 +279,8 @@ func StandByInput() (bool, error) {
 
 		// プログラムの実行処理
 		// ファイルポインタへ書き込み
-		file1.WriteString(inputText + newLine)
+		wiredrawing.FileOpen(ngFile, inputText+newLine)
+		// file1.WriteString(inputText + newLine)
 		// phpでの改行を追加する
 		// file.WriteString("echo(PHP_EOL);")
 
@@ -324,7 +326,8 @@ func StandByInput() (bool, error) {
 		}
 		// bufferの読み取り開始
 		command.Start()
-		wiredrawing.LoadBuffer(buffer, previousLine)
+		// 第三引数にtrueを与えて出力結果を表示する
+		wiredrawing.LoadBuffer(buffer, previousLine, true)
 		fmt.Println("")
 	}
 	// 標準入力の終了

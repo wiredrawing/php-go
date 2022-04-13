@@ -19,7 +19,7 @@ const ensureLength int = 512
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // 2060
 // ---------------------------------------------------------------------
-func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
+func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool) (bool, error) {
 	currentLine = 0
 
 	for {
@@ -40,9 +40,16 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int) (bool, error) {
 			if from < *previousLine && *previousLine <= to {
 				diff := *previousLine - currentLine
 				tempSlice := readData[diff:]
-				fmt.Fprint(os.Stdout, string(tempSlice))
+				// 出力内容の表示フラグがtrueの場合のみ
+				if showBuffer == true {
+					fmt.Fprint(os.Stdout, string(tempSlice))
+				}
 			} else {
-				fmt.Fprint(os.Stdout, string(readData))
+				// 出力内容の表示フラグがtrueの場合のみ
+				if showBuffer == true {
+					fmt.Fprint(os.Stdout, string(readData))
+				}
+
 			}
 		}
 		currentLine += n
