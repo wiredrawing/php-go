@@ -24,7 +24,7 @@ import (
 var signal_chan chan os.Signal = make(chan os.Signal)
 
 // ガベージコレクションを任意の時間間隔で実行
-func regularsGabageCollection() {
+func regularsGarbageCollection() {
 
 	// var mem runtime.MemStats
 	// for {
@@ -79,7 +79,7 @@ func main() {
 	)
 
 	// GCを実行
-	go regularsGabageCollection()
+	go regularsGarbageCollection()
 
 	var exit chan int = make(chan int)
 	// 割り込み対処を実行するGoルーチン
