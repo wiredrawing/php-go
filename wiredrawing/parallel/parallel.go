@@ -7,14 +7,15 @@ import (
 	"syscall"
 )
 
-// --------------------------------------------
+// InterruptProcess
 // 割り込み対処を実行するGoルーチン
 // コンソール上でのinterruptイベントを監視
 // --------------------------------------------
 func InterruptProcess(exit chan int, observer chan os.Signal) {
 	var s os.Signal
 	for {
-		s, _ = <-observer
+		// 変数 observerから中身を取り出すまで ここで処理がとまる
+		s, _ = <-observer // 待機
 		if s == syscall.SIGHUP {
 			fmt.Print("[syscall.SIGHUP].\r\n")
 			// 割り込みを無視
