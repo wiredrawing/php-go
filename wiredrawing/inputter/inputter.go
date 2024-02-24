@@ -16,28 +16,31 @@ import (
 // 入力用ポインタ
 var scanner *bufio.Scanner
 
-var ngFile string = ".validation.dat"
+var ngFile = ".validation.dat"
 
-var okFile string = ".success.dat"
+var okFile = ".success.dat"
+
+var filePathForError = ".erorr_message.dat"
 
 // 改行文字を定義
 const newLine string = "\n"
 
 var command *exec.Cmd
-var previousLine *int = new(int)
+var previousLine = new(int)
 
 // 入力内容を保持する変数
-var inputText string = ""
+var inputText = ""
 
 var file1 *os.File
 var file2 *os.File
+var file3 *os.File
 
 // 一番最後に実行されたPHPコマンドの エラーメッセージを保持
-var lastErrorMessage []byte = make([]byte, 0, 512)
+var lastErrorMessage = make([]byte, 0, 512)
 var err error
 
 // ターミナルを終了させるためのキーワード群
-var wordsToExit []string = make([]string, 0, 32)
+var wordsToExit = make([]string, 0, 32)
 
 // ----------------------------------------------//
 // パッケージの初期化
@@ -62,13 +65,20 @@ func init() {
 	fmt.Fprintln(file2, "<?php ")
 	// file2.WriteString("<?php " + "\n")
 
+	// 実行時エラーの出力用ファイル
+	file3, err = os.Create(filePathForError)
+	if err != nil {
+		fmt.Printf("Could not create the file: %s", filePathForError)
+		panic(err)
+	}
+
 	// ターミナル終了キーワードを設定
 	wordsToExit = append(wordsToExit, "y")
 	wordsToExit = append(wordsToExit, "Y")
 	wordsToExit = append(wordsToExit, "yes")
 }
 
-// 標準入力を待ち受ける関数
+// StandByInput 標準入力を待ち受ける関数
 func StandByInput() (bool, error) {
 
 	*previousLine = 0
@@ -82,7 +92,7 @@ func StandByInput() (bool, error) {
 	// 標準入力の開始
 	// ----------------------------------------------
 	scanner = bufio.NewScanner(os.Stdin)
-	var prompt string = " >>> "
+	var prompt = " >>> "
 	for {
 		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
 		if err != nil {
@@ -93,15 +103,6 @@ func StandByInput() (bool, error) {
 			panic(err)
 		}
 		fmt.Print(prompt)
-		// var isOk bool = scanner.Scan()
-		// if isOk != true {
-		// 	fmt.Println("Failed executing the command named scanner.Scan().")
-		// 	// scannerを初期化
-		// 	scanner = nil
-		// 	scanner = bufio.NewScanner(os.Stdin)
-		// 	continue
-		// }
-		// inputText = scanner.Text()
 
 		// 両端のスペースを削除
 		inputText = strings.TrimSpace(wiredrawing.StdInput())
@@ -118,17 +119,8 @@ func StandByInput() (bool, error) {
 			{
 				fmt.Println("Do you really want to finish?  yes / y or Y or yes  , No / other")
 
-				// toExit := bufio.NewScanner(os.Stdin)
-				// isOk := toExit.Scan()
-				// if isOk != true {
-				// 	// 標準入力からの読み取り失敗時
-				// 	fmt.Println("Could not take a string you input.")
-				// 	fmt.Println("Please input the word \"exit\".")
-				// 	continue
-				// }
-
 				// 両端のスペースを削除
-				var inputText string = wiredrawing.StdInput()
+				var inputText = wiredrawing.StdInput()
 				inputText = strings.TrimSpace(inputText)
 				if len(inputText) == 0 {
 					// 標準入力からの読み取り失敗時
@@ -139,7 +131,7 @@ func StandByInput() (bool, error) {
 				if wiredrawing.InArray(inputText, wordsToExit) {
 					// 終了メッセージを表示
 					// string型を[]byteに変換して書き込み
-					var messageToEnd []byte = []byte("Thank you for using me! Good by.")
+					var messageToEnd = []byte("Thank you for using me! Good by.")
 					os.Stdout.Write(messageToEnd)
 					break
 				}
@@ -180,7 +172,10 @@ func StandByInput() (bool, error) {
 					continue
 				}
 				fileBuffer = append(fileBuffer[:indexToDelete], fileBuffer[indexToDelete+1:]...)
-				file.Close()
+				var closeError = file.Close()
+				if closeError != nil {
+					panic(closeError)
+				}
 
 				// validation用ファイルを空に
 				file1.Close()
@@ -226,7 +221,7 @@ func StandByInput() (bool, error) {
 				command.Start()
 				*previousLine = 0
 				// 第三引数にfalseを与えて,実行結果の出力を破棄する
-				wiredrawing.LoadBuffer(buffer, previousLine, false)
+				wiredrawing.LoadBuffer(buffer, previousLine, false, false)
 				fmt.Println("")
 				continue
 			}
@@ -237,7 +232,7 @@ func StandByInput() (bool, error) {
 		// ファイルサイズを空にする
 		if inputText == "clear" || inputText == "refresh" {
 			// phpスクリプトチェック用ファイルを殻にする
-			os.Truncate(ngFile, 0)
+			_ = os.Truncate(ngFile, 0)
 			file1.Seek(0, 0)
 			f, err := os.Open(okFile)
 			if err != nil {
@@ -264,8 +259,8 @@ func StandByInput() (bool, error) {
 				}
 				tempScanner := bufio.NewScanner(catFile)
 
-				var index int = 0
-				var indexStr string = ""
+				var index = 0
+				var indexStr = ""
 				for tempScanner.Scan() {
 					indexStr = fmt.Sprintf("%03d", index)
 					fmt.Print(indexStr + ": ")
@@ -289,7 +284,10 @@ func StandByInput() (bool, error) {
 		// --------------------------------------------
 		command = exec.Command("php", ngFile)
 
-		command.Run()
+		var e = command.Run()
+		if e != nil {
+			// PHPコマンドの実行に失敗した場合
+		}
 		exitCode := command.ProcessState.ExitCode()
 
 		// --------------------------------------------
@@ -297,7 +295,36 @@ func StandByInput() (bool, error) {
 		// あるいは入力途中とする
 		// --------------------------------------------
 		if exitCode != 0 {
-			lastErrorMessage, err = exec.Command("php", ngFile).Output()
+			fmt.Fprint(os.Stdout, "\033[31m")
+			fmt.Println("Error: ", exitCode)
+			var _ *os.File
+			_, err = os.OpenFile(filePathForError, os.O_APPEND|os.O_WRONLY, 0777)
+			if err != nil {
+				panic(err)
+			}
+			command := exec.Command("php", ngFile)
+			buffer, err := command.StdoutPipe()
+			command.Start()
+			if err == nil {
+				wiredrawing.LoadBuffer(buffer, previousLine, true, true)
+			}
+			//var err error
+			//var lastErrorMessageString string = string(lastErrorMessage)
+			//fmt.Printf(lastErrorMessageString)
+			//var temp string = ""
+			//for number, value := range strings.Split(lastErrorMessageString, "\n") {
+			//	if number >= *previousLine {
+			//		temp += value + newLine
+			//		continue
+			//	}
+			//}
+			//fmt.Printf(temp)
+			//_, err = errorFile.WriteString(temp + newLine)
+			//if err != nil {
+			//	fmt.Print("Could not write the error message to the file.")
+			//	panic(err)
+			//}
+			fmt.Fprint(os.Stdout, "\033[0m")
 			prompt = " ... "
 			continue
 		}
@@ -327,7 +354,7 @@ func StandByInput() (bool, error) {
 		// bufferの読み取り開始
 		command.Start()
 		// 第三引数にtrueを与えて出力結果を表示する
-		wiredrawing.LoadBuffer(buffer, previousLine, true)
+		wiredrawing.LoadBuffer(buffer, previousLine, true, false)
 		fmt.Println("")
 	}
 	// 標準入力の終了

@@ -111,5 +111,10 @@ func main() {
 	// waiter.Add(1)
 	// go inputter.StandByInput(waiter)
 	// waiter.Wait()
-	inputter.StandByInput()
+	var _ bool
+	var err error
+	_, err = inputter.StandByInput()
+	if err != nil {
+		panic(err)
+	}
 }

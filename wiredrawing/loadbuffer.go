@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
+	"runtime/debug"
 )
 
 var scanner *bufio.Scanner
@@ -19,7 +21,7 @@ const ensureLength int = 512
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // 2060
 // ---------------------------------------------------------------------
-func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool) (bool, error) {
+func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool) (bool, error) {
 	currentLine = 0
 
 	for {
@@ -37,6 +39,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool) (bool,
 		from := currentLine
 		to := currentLine + n
 		if (currentLine + n) >= *previousLine {
+			fmt.Fprintf(os.Stdout, "\033[32m")
 			if from < *previousLine && *previousLine <= to {
 				diff := *previousLine - currentLine
 				tempSlice := readData[diff:]
@@ -49,13 +52,19 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool) (bool,
 				if showBuffer == true {
 					fmt.Fprint(os.Stdout, string(readData))
 				}
-
 			}
+			// コンソールのカラーをもとにもどす
+			fmt.Fprint(os.Stdout, "\033[0m")
 		}
 		currentLine += n
 		readData = nil
 	}
-	*previousLine = currentLine
-
+	// エラーチェック以外の場合
+	if whenError != true {
+		*previousLine = currentLine
+	}
+	// 使用したメモリを開放してみる
+	runtime.GC()
+	debug.FreeOSMemory()
 	return true, nil
 }
