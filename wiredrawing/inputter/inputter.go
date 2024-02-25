@@ -117,17 +117,21 @@ func StandByInput() (bool, error) {
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 			{
-				fmt.Println("Do you really want to finish?  yes / y or Y or yes  , No / other")
+				fmt.Fprint(os.Stdout, "\033[31m")
+				fmt.Println("PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。")
+				fmt.Fprint(os.Stdout, "\033[0m")
 
 				// 両端のスペースを削除
 				var inputText = wiredrawing.StdInput()
 				inputText = strings.TrimSpace(inputText)
+				// 入力内容が空文字の場合コマンドラインを終了する
 				if len(inputText) == 0 {
-					// 標準入力からの読み取り失敗時
-					fmt.Println("Could not take a string you input.")
-					fmt.Println("Please input the word \"exit\".")
+					fmt.Fprint(os.Stdout, "\033[31m")
+					fmt.Fprint(os.Stdout, "キャンセルしました。")
+					fmt.Fprint(os.Stdout, "\033[0m")
 					continue
 				}
+
 				if wiredrawing.InArray(inputText, wordsToExit) {
 					// 終了メッセージを表示
 					// string型を[]byteに変換して書き込み
@@ -161,6 +165,10 @@ func StandByInput() (bool, error) {
 				}
 				// 削除したい対象の行数を取得する
 				var indexToDelete int
+				if hasIndex(tokens, 1) != true {
+					fmt.Println("削除したい行数を指定してください")
+					continue
+				}
 				indexToDelete, err = strconv.Atoi(tokens[1])
 				if err != nil {
 					panic(err)
@@ -360,4 +368,8 @@ func StandByInput() (bool, error) {
 	// 標準入力の終了
 
 	return true, nil
+}
+
+func hasIndex(slice []string, index int) bool {
+	return (0 <= index) && (index < len(slice))
 }
