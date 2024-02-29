@@ -108,6 +108,8 @@ func StandByInput() (bool, error) {
 		inputText = strings.TrimSpace(wiredrawing.StdInput())
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
+			runtime.GC()
+			debug.FreeOSMemory()
 			continue
 		}
 
