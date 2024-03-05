@@ -1,9 +1,7 @@
 package main
 
 import (
-	// 標準パッケージ
-
-	sha2562 "crypto/sha256"
+	"crypto/sha256"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"golang.org/x/sys/windows"
@@ -15,6 +13,8 @@ import (
 	"php-go/wiredrawing"
 	"php-go/wiredrawing/parallel"
 	"runtime"
+	"runtime/debug"
+	"time"
 
 	// ここは独自パッケージ
 
@@ -26,44 +26,59 @@ import (
 
 // var command *cobra.Command = new(cobra.Command)
 
-// 割り込み監視用
-var signal_chan chan os.Signal = make(chan os.Signal)
-
 // ガベージコレクションを任意の時間間隔で実行
 func regularsGarbageCollection() {
 
-	// var mem runtime.MemStats
-	// for {
-
-	// 	runtime.ReadMemStats(&mem)
-	// 	// fmt.Printf("(1)Alloc:%d, (2)TotalAlloc:%d, (3)Sys:%d, (4)HeapAlloc:%d, (5)HeapSys:%d, (6)HeapReleased:%d\r\n",
-	// 	// 	mem.Alloc, // HeapAllocと同値
-	// 	// 	mem.TotalAlloc,
-	// 	// 	mem.Sys,       // OSから得た合計バイト数
-	// 	// 	mem.HeapAlloc, // Allocと同値
-	// 	// 	mem.HeapSys,
-	// 	// 	mem.HeapReleased, // OSへ返却されたヒープ
-	// 	// )
-	// 	// time.Sleep(5 * time.Second)
-	// 	// // fmt.Println("Executed gc")
-	// 	// runtime.GC()
-	// 	// debug.FreeOSMemory()
-	// 	// if mem.Alloc > 3000000 {
-	// 	// 	runtime.GC()
-	// 	// 	debug.FreeOSMemory()
-	// 	// }
-	// }
+	var mem runtime.MemStats
+	for {
+		runtime.ReadMemStats(&mem)
+		fmt.Printf("(1)Alloc:%d, (2)TotalAlloc:%d, (3)Sys:%d, (4)HeapAlloc:%d, (5)HeapSys:%d, (6)HeapReleased:%d\r\n",
+			mem.Alloc, // HeapAllocと同値
+			mem.TotalAlloc,
+			mem.Sys,       // OSから得た合計バイト数
+			mem.HeapAlloc, // Allocと同値
+			mem.HeapSys,
+			mem.HeapReleased, // OSへ返却されたヒープ
+		)
+		time.Sleep(5 * time.Second)
+		// fmt.Println("Executed gc")
+		runtime.GC()
+		debug.FreeOSMemory()
+		if mem.Alloc > 3000000 {
+			runtime.GC()
+			debug.FreeOSMemory()
+		}
+	}
 }
 
-var _ bool
-var err error
-var targetFileName string = ""
-var workingDirectory string = ""
+// ファイルのハッシュ値を計算する
+func hash(algo string, filepath string) string {
+	file, err := os.Open(filepath)
+	if err != nil {
+		log.Println(err)
+		return ""
+	}
+	defer file.Close()
 
-// 監視対象のファイル名
-var filePathForSurveillance string = ""
+	h := sha256.New()
+	readBytes, _ := ioutil.ReadAll(file)
+	h.Write(readBytes)
+	hashedValue := h.Sum(nil)
+	return string(hashedValue)
+}
 
 func main() {
+
+	var _ bool
+	var err error
+	var targetFileName string = ""
+	var workingDirectory string = ""
+
+	// 監視対象のファイル名
+	var filePathForSurveillance string = ""
+
+	// 割り込み監視用
+	var signal_chan chan os.Signal = make(chan os.Signal)
 
 	// []string型でコマンドライン引数を受け取る
 	var arguments = os.Args
@@ -99,7 +114,9 @@ func main() {
 
 		// Start listening for events.
 		go func() {
-			var previousHash [32]byte
+			// ファイル内容のハッシュ計算用に保持
+			var previousHash []byte
+			var hashedValue []byte
 			for {
 				select {
 				case event, ok := <-watcher.Events:
@@ -109,12 +126,15 @@ func main() {
 					if event.Has(fsnotify.Write) && event.Name == filePathForSurveillance {
 						surveillanceFile, _ := os.Open(event.Name)
 						readByte, _ := ioutil.ReadAll(surveillanceFile)
-						sha256 := sha2562.Sum256(readByte)
-						if sha256 == previousHash {
+						h := sha256.New()
+						h.Write(readByte)
+						hashedValue = h.Sum(nil)
+						log.Println("Hashed value: ", string(hashedValue))
+						if string(hashedValue) == string(previousHash) {
 							continue
 						}
 						// 古いハッシュを更新
-						previousHash = sha256
+						previousHash = hashedValue
 						command := exec.Command("php", filePathForSurveillance)
 						buffer, _ := command.StdoutPipe()
 						err := command.Start()
@@ -123,10 +143,7 @@ func main() {
 						}
 						var previousLine *int = new(int)
 						*previousLine = 0
-						_, err2 := wiredrawing.LoadBuffer(buffer, previousLine, true, false)
-						if err2 != nil {
-							return
-						}
+						_ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
 						fmt.Fprint(os.Stdout, "\n")
 					}
 				case err, ok := <-watcher.Errors:
@@ -197,7 +214,7 @@ func main() {
 	)
 
 	// GCを実行
-	go regularsGarbageCollection()
+	//go regularsGarbageCollection()
 
 	var exit chan int = make(chan int)
 	// 割り込み対処を実行するGoルーチン

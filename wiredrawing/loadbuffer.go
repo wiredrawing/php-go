@@ -1,7 +1,6 @@
 package wiredrawing
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -9,19 +8,19 @@ import (
 	"runtime/debug"
 )
 
-var scanner *bufio.Scanner
+//var scanner *bufio.Scanner
+//
+//var loadedBuffer string
 
-var loadedBuffer string
-
-var currentLine int
-
-const ensureLength int = 512
-
-// ---------------------------------------------------------------------
+// LoadBuffer ---------------------------------------------------------------------
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // 2060
 // ---------------------------------------------------------------------
-func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool) (bool, error) {
+func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) bool {
+	var currentLine int
+
+	const ensureLength int = 512
+
 	currentLine = 0
 
 	for {
@@ -39,7 +38,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 		from := currentLine
 		to := currentLine + n
 		if (currentLine + n) >= *previousLine {
-			fmt.Fprintf(os.Stdout, "\033[32m")
+			fmt.Fprintf(os.Stdout, "\033["+colorCode+"m")
 			if from < *previousLine && *previousLine <= to {
 				diff := *previousLine - currentLine
 				tempSlice := readData[diff:]
@@ -66,5 +65,5 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 	// 使用したメモリを開放してみる
 	runtime.GC()
 	debug.FreeOSMemory()
-	return true, nil
+	return true
 }

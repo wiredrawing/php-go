@@ -13,9 +13,6 @@ import (
 	"strings"
 )
 
-// 入力用ポインタ
-var scanner *bufio.Scanner
-
 var ngFile = ".validation.dat"
 
 var okFile = ".success.dat"
@@ -25,17 +22,12 @@ var filePathForError = ".erorr_message.dat"
 // 改行文字を定義
 const newLine string = "\n"
 
-var command *exec.Cmd
 var previousLine = new(int)
 
 // 入力内容を保持する変数
 var inputText = ""
 
-var file1 *os.File
-var file2 *os.File
-var file3 *os.File
-
-// 一番最後に実行されたPHPコマンドの エラーメッセージを保持
+// 最後に実行されたPHPコマンドの エラーメッセージを保持
 var lastErrorMessage = make([]byte, 0, 512)
 var err error
 
@@ -47,6 +39,28 @@ var wordsToExit = make([]string, 0, 32)
 // init関数は値を返却できない
 // ----------------------------------------------
 func init() {
+
+	var file1 *os.File
+	var file2 *os.File
+	var file3 *os.File
+
+	var homeDir string
+	homeDir, _ = os.UserHomeDir()
+	// 本アプリケーション専用の設定ディレクトリ
+	var dotDir = homeDir + "\\.php-go"
+	// ディレクトリが存在しない場合は作成する
+	_, err := os.Stat(dotDir)
+	if (err != nil) && os.IsNotExist(err) {
+		// <dotDir>が存在しない場
+		err = os.Mkdir(dotDir, 0777)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	ngFile = dotDir + "\\" + ngFile
+	okFile = dotDir + "\\" + okFile
+
 	// 入力内容のコマンド結果確認用
 	file1, err = os.Create(ngFile)
 	if err != nil {
@@ -68,6 +82,7 @@ func init() {
 	// 実行時エラーの出力用ファイル
 	file3, err = os.Create(filePathForError)
 	if err != nil {
+		fmt.Printf("Pointer of file3: %p\n", file3)
 		fmt.Printf("Could not create the file: %s", filePathForError)
 		panic(err)
 	}
@@ -81,6 +96,8 @@ func init() {
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput() (bool, error) {
 
+	var file1 *os.File
+	var file2 *os.File
 	*previousLine = 0
 
 	// 遅延実行
@@ -91,7 +108,6 @@ func StandByInput() (bool, error) {
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
-	scanner = bufio.NewScanner(os.Stdin)
 	var prompt = " >>> "
 	for {
 		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
@@ -231,7 +247,7 @@ func StandByInput() (bool, error) {
 				command.Start()
 				*previousLine = 0
 				// 第三引数にfalseを与えて,実行結果の出力を破棄する
-				wiredrawing.LoadBuffer(buffer, previousLine, false, false)
+				wiredrawing.LoadBuffer(buffer, previousLine, false, false, "34")
 				fmt.Println("")
 				continue
 			}
@@ -284,7 +300,10 @@ func StandByInput() (bool, error) {
 
 		// プログラムの実行処理
 		// ファイルポインタへ書き込み
-		wiredrawing.FileOpen(ngFile, inputText+newLine)
+		_, err := wiredrawing.FileOpen(ngFile, inputText+newLine)
+		if err != nil {
+			return false, err
+		}
 		// file1.WriteString(inputText + newLine)
 		// phpでの改行を追加する
 		// file.WriteString("echo(PHP_EOL);")
@@ -292,7 +311,7 @@ func StandByInput() (bool, error) {
 		// --------------------------------------------
 		// 一旦入力内容が正しく終了するかどうかを検証
 		// --------------------------------------------
-		command = exec.Command("php", ngFile)
+		command := exec.Command("php", ngFile)
 
 		var e = command.Run()
 		if e != nil {
@@ -316,7 +335,8 @@ func StandByInput() (bool, error) {
 			buffer, err := command.StdoutPipe()
 			command.Start()
 			if err == nil {
-				wiredrawing.LoadBuffer(buffer, previousLine, true, true)
+				// エラーコード実行時は出力結果を赤色で表示する
+				wiredrawing.LoadBuffer(buffer, previousLine, true, true, "31")
 			}
 			//var err error
 			//var lastErrorMessageString string = string(lastErrorMessage)
@@ -364,7 +384,8 @@ func StandByInput() (bool, error) {
 		// bufferの読み取り開始
 		command.Start()
 		// 第三引数にtrueを与えて出力結果を表示する
-		wiredrawing.LoadBuffer(buffer, previousLine, true, false)
+		// 出力文字列の色を青にして出力
+		wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
 		fmt.Println("")
 	}
 	// 標準入力の終了
