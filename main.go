@@ -1,3 +1,4 @@
+// build option go build -ldflags "-w -s"  -trimpath
 package main
 
 import (
@@ -13,7 +14,6 @@ import (
 	"php-go/wiredrawing"
 	"php-go/wiredrawing/parallel"
 	"runtime"
-	"runtime/debug"
 	"time"
 
 	// ここは独自パッケージ
@@ -43,16 +43,16 @@ func regularsGarbageCollection() {
 		time.Sleep(5 * time.Second)
 		// fmt.Println("Executed gc")
 		runtime.GC()
-		debug.FreeOSMemory()
+		//debug.FreeOSMemory()
 		if mem.Alloc > 3000000 {
 			runtime.GC()
-			debug.FreeOSMemory()
+			//debug.FreeOSMemory()
 		}
 	}
 }
 
 // ファイルのハッシュ値を計算する
-func hash(algo string, filepath string) string {
+func hash(filepath string) string {
 	file, err := os.Open(filepath)
 	if err != nil {
 		log.Println(err)
@@ -115,8 +115,10 @@ func main() {
 		// Start listening for events.
 		go func() {
 			// ファイル内容のハッシュ計算用に保持
-			var previousHash []byte
-			var hashedValue []byte
+			//var previousHash []byte
+			//var hashedValue []byte
+			var hashedValue string
+			var previousHash string
 			for {
 				select {
 				case event, ok := <-watcher.Events:
@@ -124,13 +126,14 @@ func main() {
 						return
 					}
 					if event.Has(fsnotify.Write) && event.Name == filePathForSurveillance {
-						surveillanceFile, _ := os.Open(event.Name)
-						readByte, _ := ioutil.ReadAll(surveillanceFile)
-						h := sha256.New()
-						h.Write(readByte)
-						hashedValue = h.Sum(nil)
+						hashedValue = hash(filePathForSurveillance)
+						//surveillanceFile, _ := os.Open(event.Name)
+						//readByte, _ := ioutil.ReadAll(surveillanceFile)
+						//h := sha256.New()
+						//h.Write(readByte)
+						//hashedValue = h.Sum(nil)
 						log.Println("Hashed value: ", string(hashedValue))
-						if string(hashedValue) == string(previousHash) {
+						if hashedValue == previousHash {
 							continue
 						}
 						// 古いハッシュを更新
@@ -144,7 +147,7 @@ func main() {
 						var previousLine *int = new(int)
 						*previousLine = 0
 						_ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
-						fmt.Fprint(os.Stdout, "\n")
+						fmt.Println("")
 					}
 				case err, ok := <-watcher.Errors:
 					if !ok {

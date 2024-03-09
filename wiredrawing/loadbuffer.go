@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"runtime"
-	"runtime/debug"
 )
 
 //var scanner *bufio.Scanner
@@ -16,29 +15,33 @@ import (
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // 2060
 // ---------------------------------------------------------------------
-func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) bool {
+func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) string {
+	fmt.Println("previousLine: ", *previousLine)
 	var currentLine int
 
 	const ensureLength int = 512
 
 	currentLine = 0
 
+	// whenError == true の場合バッファ内容を返却してやる
+	var bufferWhenError string
+	os.Stdout.WriteString("\033[" + colorCode + "m")
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
-		readData = readData[:n]
-		if err != nil {
+		if (err != nil) && (err != io.EOF) {
+			os.Stderr.Write([]byte(err.Error()))
 			break
 		}
-
 		if n == 0 {
 			break
 		}
+		readData = readData[:n]
+		bufferWhenError += string(readData)
 
 		from := currentLine
 		to := currentLine + n
 		if (currentLine + n) >= *previousLine {
-			fmt.Fprintf(os.Stdout, "\033["+colorCode+"m")
 			if from < *previousLine && *previousLine <= to {
 				diff := *previousLine - currentLine
 				tempSlice := readData[diff:]
@@ -52,8 +55,6 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 					fmt.Fprint(os.Stdout, string(readData))
 				}
 			}
-			// コンソールのカラーをもとにもどす
-			fmt.Fprint(os.Stdout, "\033[0m")
 		}
 		currentLine += n
 		readData = nil
@@ -64,6 +65,8 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 	}
 	// 使用したメモリを開放してみる
 	runtime.GC()
-	debug.FreeOSMemory()
-	return true
+	// コンソールのカラーをもとにもどす
+	os.Stdout.WriteString("\033[0m")
+	//debug.FreeOSMemory()
+	return bufferWhenError
 }

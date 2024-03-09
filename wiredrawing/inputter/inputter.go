@@ -3,10 +3,13 @@ package inputter
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"php-go/wiredrawing"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -31,8 +34,18 @@ var inputText = ""
 var lastErrorMessage = make([]byte, 0, 512)
 var err error
 
-// ターミナルを終了させるためのキーワード群
-var wordsToExit = make([]string, 0, 32)
+func makeDirectory(dir string) bool {
+	_, err := os.Stat(dir)
+	// 指定したディレクトリが存在している場合は何もしない
+	if (err != nil) && os.IsNotExist(err) {
+		// <dotDir>が存在しない場
+		err = os.Mkdir(dir, 0777)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return true
+}
 
 // ----------------------------------------------//
 // パッケージの初期化
@@ -40,76 +53,104 @@ var wordsToExit = make([]string, 0, 32)
 // ----------------------------------------------
 func init() {
 
-	var file1 *os.File
-	var file2 *os.File
-	var file3 *os.File
+	const ngFile = ".validation.dat"
+	const okFile = ".success.dat"
+	var filePathForError = ".erorr_message.dat"
 
 	var homeDir string
 	homeDir, _ = os.UserHomeDir()
 	// 本アプリケーション専用の設定ディレクトリ
 	var dotDir = homeDir + "\\.php-go"
 	// ディレクトリが存在しない場合は作成する
-	_, err := os.Stat(dotDir)
-	if (err != nil) && os.IsNotExist(err) {
-		// <dotDir>が存在しない場
-		err = os.Mkdir(dotDir, 0777)
-		if err != nil {
-			panic(err)
-		}
-	}
+	makeDirectory(dotDir)
 
-	ngFile = dotDir + "\\" + ngFile
-	okFile = dotDir + "\\" + okFile
+	filePathForError = dotDir + "\\" + filePathForError
+
+	var file1 *os.File
+	var file2 *os.File
+	var file3 *os.File
 
 	// 入力内容のコマンド結果確認用
-	file1, err = os.Create(ngFile)
+	file1, err = os.Create(dotDir + "\\" + ngFile)
 	if err != nil {
 		panic(err)
 	}
 	// phpの<?phpタグを記述する
-	fmt.Fprintln(file1, "<?php ")
-	// file1.WriteString("<?php " + "\n")
+	file1.Write([]byte("<?php " + "\n"))
 
 	// 実際の実行ファイル用
-	file2, err = os.Create(okFile)
+	file2, err = os.Create(dotDir + "\\" + okFile)
 	if err != nil {
 		panic(err)
 	}
 	// phpの<?phpタグを記述する
-	fmt.Fprintln(file2, "<?php ")
-	// file2.WriteString("<?php " + "\n")
+	file2.WriteString("<?php " + "\n")
 
 	// 実行時エラーの出力用ファイル
 	file3, err = os.Create(filePathForError)
 	if err != nil {
-		fmt.Printf("Pointer of file3: %p\n", file3)
-		fmt.Printf("Could not create the file: %s", filePathForError)
+		log.Printf("Pointer of file3: %p\n", file3)
+		log.Printf("Could not create the file: %s", filePathForError)
 		panic(err)
 	}
 
-	// ターミナル終了キーワードを設定
-	wordsToExit = append(wordsToExit, "y")
-	wordsToExit = append(wordsToExit, "Y")
-	wordsToExit = append(wordsToExit, "yes")
 }
 
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput() (bool, error) {
 
-	var file1 *os.File
-	var file2 *os.File
-	*previousLine = 0
+	// PHPのエラーメッセージの正規表現を事前コンパイルする
+	var PHPErrorMesssages []string = []string{
+		//`Warning: Use of undefined constant (.+)? - assumed '(.+)?' (this will throw an Error in a future version of PHP)`,
+		//`Notice: Undefined index: .+?`,
+		//`Notice: Undefined variable: .+? in`,
+		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Call[ ]+to[ ]+?undefined[ ]+?function[ ]+?.+?`,
+		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Class[ ]+'.+?'[ ]+not[ ]+found[ ]+in`,
+		//`Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; .+? has a deprecated constructor`,
+	}
+	var compiledPHPErrorMessages = make([]*regexp.Regexp, 0, 32)
+	for _, value := range PHPErrorMesssages {
+		var r *regexp.Regexp = regexp.MustCompile(value)
+		compiledPHPErrorMessages = append(compiledPHPErrorMessages, r)
+	}
 
-	// 遅延実行
-	defer file1.Close()
-	defer file2.Close()
+	// ターミナルを終了させるためのキーワード群
+	var wordsToExit = make([]string, 0, 32)
+
+	// ターミナル終了キーワードを設定
+	wordsToExit = append(wordsToExit, "y")
+	wordsToExit = append(wordsToExit, "Y")
+	wordsToExit = append(wordsToExit, "yes")
+
+	var ngFile = ".validation.dat"
+	var okFile = ".success.dat"
+	var filePathForError = ".erorr_message.dat"
+
+	var homeDir string
+	homeDir, _ = os.UserHomeDir()
+	// 本アプリケーション専用の設定ディレクトリ
+	var dotDir = homeDir + "\\.php-go"
+	// ディレクトリが存在しない場合は作成する
+	makeDirectory(dotDir)
+
+	ngFile = dotDir + "\\" + ngFile
+	okFile = dotDir + "\\" + okFile
+	filePathForError = dotDir + "\\" + filePathForError
+
+	*previousLine = 0
 
 	// ----------------------------------------------
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
 	var prompt = " >>> "
+	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	for {
+		var file1 *os.File
+		var file2 *os.File
+		// 遅延実行
+		defer file1.Close()
+		defer file2.Close()
 		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
 		if err != nil {
 			panic(err)
@@ -125,7 +166,7 @@ func StandByInput() (bool, error) {
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
 			runtime.GC()
-			debug.FreeOSMemory()
+			//debug.FreeOSMemory()
 			continue
 		}
 
@@ -135,18 +176,14 @@ func StandByInput() (bool, error) {
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 			{
-				fmt.Fprint(os.Stdout, "\033[31m")
-				fmt.Println("PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。")
-				fmt.Fprint(os.Stdout, "\033[0m")
-
+				fmt.Println(colorWrapping("31", "PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。"))
+				fmt.Print(prompt)
 				// 両端のスペースを削除
 				var inputText = wiredrawing.StdInput()
 				inputText = strings.TrimSpace(inputText)
 				// 入力内容が空文字の場合コマンドラインを終了する
 				if len(inputText) == 0 {
-					fmt.Fprint(os.Stdout, "\033[31m")
-					fmt.Fprint(os.Stdout, "キャンセルしました。")
-					fmt.Fprint(os.Stdout, "\033[0m")
+					fmt.Println(colorWrapping("31", "キャンセルしました。"))
 					continue
 				}
 
@@ -154,7 +191,10 @@ func StandByInput() (bool, error) {
 					// 終了メッセージを表示
 					// string型を[]byteに変換して書き込み
 					var messageToEnd = []byte("Thank you for using me! Good by.")
-					os.Stdout.Write(messageToEnd)
+					_, err := os.Stdout.Write([]byte(colorWrapping("34", string(messageToEnd))))
+					if err != nil {
+						return false, err
+					}
 					break
 				}
 				continue
@@ -304,9 +344,6 @@ func StandByInput() (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		// file1.WriteString(inputText + newLine)
-		// phpでの改行を追加する
-		// file.WriteString("echo(PHP_EOL);")
 
 		// --------------------------------------------
 		// 一旦入力内容が正しく終了するかどうかを検証
@@ -318,42 +355,57 @@ func StandByInput() (bool, error) {
 			// PHPコマンドの実行に失敗した場合
 		}
 		exitCode := command.ProcessState.ExitCode()
-
-		// --------------------------------------------
-		// 終了コードが0でない場合は何かしらのエラー
-		// あるいは入力途中とする
-		// --------------------------------------------
+		// エラーコードが0でない場合
 		if exitCode != 0 {
-			fmt.Fprint(os.Stdout, "\033[31m")
-			fmt.Println("Error: ", exitCode)
 			var _ *os.File
 			_, err = os.OpenFile(filePathForError, os.O_APPEND|os.O_WRONLY, 0777)
 			if err != nil {
 				panic(err)
 			}
 			command := exec.Command("php", ngFile)
-			buffer, err := command.StdoutPipe()
-			command.Start()
-			if err == nil {
-				// エラーコード実行時は出力結果を赤色で表示する
-				wiredrawing.LoadBuffer(buffer, previousLine, true, true, "31")
+			buffer, err := command.StderrPipe()
+			if err != nil {
+				log.Fatal(err)
 			}
-			//var err error
-			//var lastErrorMessageString string = string(lastErrorMessage)
-			//fmt.Printf(lastErrorMessageString)
-			//var temp string = ""
-			//for number, value := range strings.Split(lastErrorMessageString, "\n") {
-			//	if number >= *previousLine {
-			//		temp += value + newLine
-			//		continue
-			//	}
-			//}
-			//fmt.Printf(temp)
-			//_, err = errorFile.WriteString(temp + newLine)
-			//if err != nil {
-			//	fmt.Print("Could not write the error message to the file.")
-			//	panic(err)
-			//}
+
+			if err := command.Start(); err != nil {
+				log.Fatal(err)
+			}
+			slurp, _ := io.ReadAll(buffer)
+			os.Stdout.Write([]byte(colorWrapping("31", string(slurp))))
+
+			if err := command.Wait(); err != nil {
+				log.Fatal(err)
+			}
+
+			var permissibleErrorFlag = true
+			for _, value := range compiledPHPErrorMessages {
+				// 規定したエラーメッセージにマッチした場合はokFileの中身をngFileにコピーする
+				if value.MatchString(string(slurp)) {
+					// phpスクリプトチェック用ファイルを殻にする
+					_ = os.Truncate(ngFile, 0)
+					file1.Seek(0, 0)
+					f, err := os.Open(okFile)
+					if err != nil {
+						panic(err)
+					}
+					source, err := ioutil.ReadAll(f)
+					if err != nil {
+						panic(err)
+					}
+					file1.WriteString(string(source))
+					permissibleErrorFlag = false
+					break
+				}
+			}
+			// 許容可能なエラーでは無い場合
+			if permissibleErrorFlag == false {
+				fmt.Fprint(os.Stdout, "\033[0m")
+				prompt = " >>> "
+				continue
+			}
+
+			// 継続可能な許容エラーの場合
 			fmt.Fprint(os.Stdout, "\033[0m")
 			prompt = " ... "
 			continue
@@ -386,7 +438,13 @@ func StandByInput() (bool, error) {
 		// 第三引数にtrueを与えて出力結果を表示する
 		// 出力文字列の色を青にして出力
 		wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
+		err = command.Wait()
+		if (err != nil) && (err.Error() != "exit status 255") {
+			panic(err)
+		}
 		fmt.Println("")
+		file1 = nil
+		file2 = nil
 	}
 	// 標準入力の終了
 
@@ -395,4 +453,8 @@ func StandByInput() (bool, error) {
 
 func hasIndex(slice []string, index int) bool {
 	return (0 <= index) && (index < len(slice))
+}
+
+func colorWrapping(colorCode string, text string) string {
+	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
