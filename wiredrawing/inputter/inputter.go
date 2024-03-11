@@ -16,22 +16,12 @@ import (
 	"strings"
 )
 
-var ngFile = ".validation.dat"
-
-var okFile = ".success.dat"
-
-var filePathForError = ".erorr_message.dat"
-
 // 改行文字を定義
 const newLine string = "\n"
-
-var previousLine = new(int)
 
 // 入力内容を保持する変数
 var inputText = ""
 
-// 最後に実行されたPHPコマンドの エラーメッセージを保持
-var lastErrorMessage = make([]byte, 0, 512)
 var err error
 
 func makeDirectory(dir string) bool {
@@ -98,7 +88,7 @@ func init() {
 
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput() (bool, error) {
-
+	var previousLine = new(int)
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
 	var PHPErrorMesssages []string = []string{
 		//`Warning: Use of undefined constant (.+)? - assumed '(.+)?' (this will throw an Error in a future version of PHP)`,
@@ -108,7 +98,7 @@ func StandByInput() (bool, error) {
 		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Class[ ]+'.+?'[ ]+not[ ]+found[ ]+in`,
 		//`Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; .+? has a deprecated constructor`,
 	}
-	var compiledPHPErrorMessages = make([]*regexp.Regexp, 0, 32)
+	var compiledPHPErrorMessages = make([]*regexp.Regexp, 0, 2)
 	for _, value := range PHPErrorMesssages {
 		var r *regexp.Regexp = regexp.MustCompile(value)
 		compiledPHPErrorMessages = append(compiledPHPErrorMessages, r)
@@ -144,13 +134,14 @@ func StandByInput() (bool, error) {
 	// 標準入力の開始
 	// ----------------------------------------------
 	var prompt = " >>> "
+	var isPermissibleError = false
 	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	for {
 		var file1 *os.File
 		var file2 *os.File
-		// 遅延実行
-		defer file1.Close()
-		defer file2.Close()
+		//// 遅延実行
+		//defer file1.Close()
+		//defer file2.Close()
 		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
 		if err != nil {
 			panic(err)
@@ -159,8 +150,12 @@ func StandByInput() (bool, error) {
 		if err != nil {
 			panic(err)
 		}
+		if isPermissibleError == true {
+			fmt.Print("\033[33m")
+		}
 		fmt.Print(prompt)
-
+		// Terminalのカラーリングを白に戻す
+		fmt.Print(colorWrapping("0", ""))
 		// 両端のスペースを削除
 		inputText = strings.TrimSpace(wiredrawing.StdInput())
 		// 入力内容が exit ならアプリケーションを終了
@@ -309,6 +304,8 @@ func StandByInput() (bool, error) {
 				panic(err)
 			}
 			file1.WriteString(string(source))
+			isPermissibleError = false
+			fmt.Print("\033[0m")
 			prompt = " >>> "
 			runtime.GC()
 			debug.FreeOSMemory()
@@ -365,20 +362,18 @@ func StandByInput() (bool, error) {
 			command := exec.Command("php", ngFile)
 			buffer, err := command.StderrPipe()
 			if err != nil {
-				log.Fatal(err)
+				//log.Fatal(err)
 			}
 
 			if err := command.Start(); err != nil {
-				log.Fatal(err)
+				//log.Fatal(err)
 			}
 			slurp, _ := io.ReadAll(buffer)
-			os.Stdout.Write([]byte(colorWrapping("31", string(slurp))))
-
 			if err := command.Wait(); err != nil {
-				log.Fatal(err)
+				//log.Fatal(err)
 			}
 
-			var permissibleErrorFlag = true
+			isPermissibleError = true
 			for _, value := range compiledPHPErrorMessages {
 				// 規定したエラーメッセージにマッチした場合はokFileの中身をngFileにコピーする
 				if value.MatchString(string(slurp)) {
@@ -394,22 +389,26 @@ func StandByInput() (bool, error) {
 						panic(err)
 					}
 					file1.WriteString(string(source))
-					permissibleErrorFlag = false
+					isPermissibleError = false
 					break
 				}
 			}
 			// 許容可能なエラーでは無い場合
-			if permissibleErrorFlag == false {
-				fmt.Fprint(os.Stdout, "\033[0m")
+			if isPermissibleError == false {
+				os.Stdout.Write([]byte(colorWrapping("31", string(slurp))))
+				//fmt.Fprint(os.Stdout, "\033[0m")
 				prompt = " >>> "
 				continue
 			}
 
 			// 継続可能な許容エラーの場合
-			fmt.Fprint(os.Stdout, "\033[0m")
+			isPermissibleError = true
+			fmt.Fprint(os.Stdout, "\033[33m")
 			prompt = " ... "
 			continue
 		}
+		isPermissibleError = false
+
 		prompt = " >>> "
 
 		// --------------------------------------------
@@ -442,7 +441,7 @@ func StandByInput() (bool, error) {
 		if (err != nil) && (err.Error() != "exit status 255") {
 			panic(err)
 		}
-		fmt.Println("")
+		fmt.Println(colorWrapping("0", ""))
 		file1 = nil
 		file2 = nil
 	}

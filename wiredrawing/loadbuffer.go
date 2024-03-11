@@ -7,19 +7,14 @@ import (
 	"runtime"
 )
 
-//var scanner *bufio.Scanner
-//
-//var loadedBuffer string
-
 // LoadBuffer ---------------------------------------------------------------------
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // 2060
 // ---------------------------------------------------------------------
 func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) string {
-	fmt.Println("previousLine: ", *previousLine)
 	var currentLine int
 
-	const ensureLength int = 512
+	const ensureLength int = 2048
 
 	currentLine = 0
 
