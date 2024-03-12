@@ -94,6 +94,8 @@ func StandByInput() (bool, error) {
 		//`Warning: Use of undefined constant (.+)? - assumed '(.+)?' (this will throw an Error in a future version of PHP)`,
 		//`Notice: Undefined index: .+?`,
 		//`Notice: Undefined variable: .+? in`,
+		`Warning:[ ]+?Uncaught[ ]+?Error:[ ]+?Closure[ ]+?object[ ]+?cannot[ ]+?have[ ]+?properties`,
+		`Fatal[ ]+?error:[ ]+?Call[ ]+?to[ ]+?undefined[ ]+?function[ ]+?(.+)?\(\) in`,
 		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Call[ ]+to[ ]+?undefined[ ]+?function[ ]+?.+?`,
 		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Class[ ]+'.+?'[ ]+not[ ]+found[ ]+in`,
 		//`Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; .+? has a deprecated constructor`,
