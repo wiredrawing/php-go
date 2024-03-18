@@ -11,13 +11,13 @@ import (
 // 引数に渡された io.ReadCloser 変数の中身を読み取り出力する
 // 2060
 // ---------------------------------------------------------------------
-func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) string {
+func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) (string, int) {
 	var currentLine int
 
 	const ensureLength int = 2048
 
 	currentLine = 0
-
+	var outputSize int = 0
 	// whenError == true の場合バッファ内容を返却してやる
 	var bufferWhenError string
 	os.Stdout.WriteString("\033[" + colorCode + "m")
@@ -42,11 +42,13 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 				tempSlice := readData[diff:]
 				// 出力内容の表示フラグがtrueの場合のみ
 				if showBuffer == true {
+					outputSize += len(tempSlice)
 					fmt.Fprint(os.Stdout, string(tempSlice))
 				}
 			} else {
 				// 出力内容の表示フラグがtrueの場合のみ
 				if showBuffer == true {
+					outputSize += len(readData)
 					fmt.Fprint(os.Stdout, string(readData))
 				}
 			}
@@ -63,5 +65,6 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 	// コンソールのカラーをもとにもどす
 	os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
-	return bufferWhenError
+
+	return bufferWhenError, outputSize
 }

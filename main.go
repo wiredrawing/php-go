@@ -146,7 +146,7 @@ func main() {
 						}
 						var previousLine *int = new(int)
 						*previousLine = 0
-						_ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
+						_, _ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
 						fmt.Println("")
 					}
 				case err, ok := <-watcher.Errors:

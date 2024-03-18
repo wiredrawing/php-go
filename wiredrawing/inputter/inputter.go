@@ -91,19 +91,32 @@ func StandByInput() (bool, error) {
 	var previousLine = new(int)
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
 	var PHPErrorMesssages []string = []string{
-		//`Warning: Use of undefined constant (.+)? - assumed '(.+)?' (this will throw an Error in a future version of PHP)`,
-		//`Notice: Undefined index: .+?`,
-		//`Notice: Undefined variable: .+? in`,
-		`Warning:[ ]+?Uncaught[ ]+?Error:[ ]+?Closure[ ]+?object[ ]+?cannot[ ]+?have[ ]+?properties`,
+		`Warning:[ ]+?Uncaught[ ]+?Error:[ ]+?Closure[ ]+?object[ ]+?cannot[ ]+?have[ ]+?propecatrties`,
+		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?ArgumentCountError:[ ]+?Too[ ]+?few[ ]+?arguments[ ]+?to[ ]+?function[ ]+?(.)*?::(.)*?`,
+		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Closure[ ]+?object[ ]+?cannot[ ]+?have[ ]+?properties`,
 		`Fatal[ ]+?error:[ ]+?Call[ ]+?to[ ]+?undefined[ ]+?function[ ]+?(.+)?\(\) in`,
 		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Call[ ]+to[ ]+?undefined[ ]+?function[ ]+?.+?`,
 		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Class[ ]+'.+?'[ ]+not[ ]+found[ ]+in`,
-		//`Deprecated: Methods with the same name as their class will not be constructors in a future version of PHP; .+? has a deprecated constructor`,
+		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?ArgumentCountError:[ ]+?Too[ ]+?few[ ]+?arguments[ ]+?to[ ]+?function[ ]+?{closure}\(\),[ ]+?([0-9]+?)[ ]+?passed in`,
 	}
 	var compiledPHPErrorMessages = make([]*regexp.Regexp, 0, 2)
 	for _, value := range PHPErrorMesssages {
 		var r *regexp.Regexp = regexp.MustCompile(value)
 		compiledPHPErrorMessages = append(compiledPHPErrorMessages, r)
+	}
+	// PHPの Fatal Error 以外のエラーメッセージの正規表現を事前コンパイルする
+	var PHPNoneErrorMessages []string = []string{
+		`Warning:[ ]+?Use of undefined constant (.+)? - assumed '(.+)?' (this will throw an Error in a future version of PHP)`,
+		`Warning:[ ]+?(.+)?\(\)[ ]+?expects[ ]+?at[ ]+?least[ ]+?[0-9]+?[ ]+?parameter(s)?,[ ]+?[0-9]+?[ ]+?given[ ]+?in`,
+		`Warning:[ ]+?Use[ ]+?of[ ]+?undefined[ ]+?constant[ ]+?(.+)?[ ]+?\-[ ]+?assumed[ ]+?'(.+)?'[ ]+?\(this will throw an Error in a future version of PHP\)[ ]+?in`,
+		`Notice:[ ]+?Undefined index: .+?`,
+		`Notice:[ ]+?Undefined variable: .+? in (.+)? on line (.+)?`,
+		`Deprecated:[ ]+?Methods with the same name as their class will not be constructors in a future version of PHP; (.+)? has a deprecated constructor`,
+	}
+	var compiledPHPNoneErrorMessages = make([]*regexp.Regexp, 0, 2)
+	for _, value := range PHPNoneErrorMessages {
+		var r *regexp.Regexp = regexp.MustCompile(value)
+		compiledPHPNoneErrorMessages = append(compiledPHPNoneErrorMessages, r)
 	}
 
 	// ターミナルを終了させるためのキーワード群
@@ -138,20 +151,8 @@ func StandByInput() (bool, error) {
 	var prompt = " >>> "
 	var isPermissibleError = false
 	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
+	var latestErrorMessage = ""
 	for {
-		var file1 *os.File
-		var file2 *os.File
-		//// 遅延実行
-		//defer file1.Close()
-		//defer file2.Close()
-		file1, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
-		if err != nil {
-			panic(err)
-		}
-		file2, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
-		if err != nil {
-			panic(err)
-		}
 		if isPermissibleError == true {
 			fmt.Print("\033[33m")
 		}
@@ -159,7 +160,8 @@ func StandByInput() (bool, error) {
 		// Terminalのカラーリングを白に戻す
 		fmt.Print(colorWrapping("0", ""))
 		// 両端のスペースを削除
-		inputText = strings.TrimSpace(wiredrawing.StdInput())
+		rawInputText := wiredrawing.StdInput()
+		inputText = strings.TrimSpace(rawInputText)
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
 			runtime.GC()
@@ -198,6 +200,47 @@ func StandByInput() (bool, error) {
 			}
 		}
 
+		if inputText == "rollback" {
+			// 入力内容を①行分削除する時
+			if prompt == " ... " {
+				// 複数行入力中の場合は<.validation.php>ファイルのみ一行削除する
+				isDeleted := popStirngToFile(ngFile, -1)
+				if isDeleted != nil {
+					panic(isDeleted)
+				}
+				//fp, err := os.Open(ngFile)
+				//if err != nil {
+				//	panic(err)
+				//}
+				//s := bufio.NewScanner(fp)
+				//var rollbackData []string
+				//for s.Scan() {
+				//	rollbackData = append(rollbackData, s.Text())
+				//}
+				//replacedRollbackData := rollbackData[:len(rollbackData)-1]
+				//fp.Close()
+				//if len(replacedRollbackData) > 1 {
+				//	os.Truncate(ngFile, 0)
+				//	fp, _ = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
+				//	for _, value := range replacedRollbackData {
+				//		fp.WriteString(value + "\n")
+				//	}
+				//	fp.Close()
+				//}
+			} else {
+				var isDeleted error
+				isDeleted = popStirngToFile(okFile, -1)
+				if isDeleted != nil {
+					panic(isDeleted)
+				}
+				isDeleted = popStirngToFile(ngFile, -1)
+				if isDeleted != nil {
+					panic(isDeleted)
+				}
+			}
+			continue
+		}
+
 		// ---------------------------------------------
 		// スペースで分割して delete indexNumber を取り出す
 		// ---------------------------------------------
@@ -205,8 +248,8 @@ func StandByInput() (bool, error) {
 
 		if tokens[0] == "delete" {
 			{
-				file1.Close()
-				file2.Close()
+				//file1.Close()
+				//file2.Close()
 				var fileBuffer []string
 				file, err := os.Open(ngFile)
 				if err != nil {
@@ -241,7 +284,7 @@ func StandByInput() (bool, error) {
 				}
 
 				// validation用ファイルを空に
-				file1.Close()
+				//file1.Close()
 				os.Truncate(ngFile, 0)
 				file, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
 				if err != nil {
@@ -259,7 +302,7 @@ func StandByInput() (bool, error) {
 
 				// 実行用用ファイルを空に
 				// ngFile => okFile に内容をコピ
-				file2.Close()
+				//file2.Close()
 				os.Truncate(okFile, 0)
 				file, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
 				if err != nil {
@@ -296,7 +339,7 @@ func StandByInput() (bool, error) {
 		if inputText == "clear" || inputText == "refresh" {
 			// phpスクリプトチェック用ファイルを殻にする
 			_ = os.Truncate(ngFile, 0)
-			file1.Seek(0, 0)
+			//file1.Seek(0, 0)
 			f, err := os.Open(okFile)
 			if err != nil {
 				panic(err)
@@ -305,12 +348,19 @@ func StandByInput() (bool, error) {
 			if err != nil {
 				panic(err)
 			}
-			file1.WriteString(string(source))
+			ioutil.WriteFile(ngFile, source, 0777)
+			//file1.WriteString(string(source))
 			isPermissibleError = false
 			fmt.Print("\033[0m")
 			prompt = " >>> "
 			runtime.GC()
 			debug.FreeOSMemory()
+			continue
+		}
+
+		// 入力内容が [show error] だった場合は直前のエラーメッセージを表示
+		if inputText == "show error" {
+			fmt.Println(colorWrapping("33", latestErrorMessage))
 			continue
 		}
 
@@ -328,8 +378,8 @@ func StandByInput() (bool, error) {
 				var indexStr = ""
 				for tempScanner.Scan() {
 					indexStr = fmt.Sprintf("%03d", index)
-					fmt.Print(indexStr + ": ")
-					fmt.Println(tempScanner.Text())
+					fmt.Print(colorWrapping("34", indexStr) + ": ")
+					fmt.Println(colorWrapping("32", tempScanner.Text()))
 					index++
 				}
 			})()
@@ -339,7 +389,7 @@ func StandByInput() (bool, error) {
 
 		// プログラムの実行処理
 		// ファイルポインタへ書き込み
-		_, err := wiredrawing.FileOpen(ngFile, inputText+newLine)
+		_, err := wiredrawing.FileOpen(ngFile, rawInputText+newLine)
 		if err != nil {
 			return false, err
 		}
@@ -357,10 +407,6 @@ func StandByInput() (bool, error) {
 		// エラーコードが0でない場合
 		if exitCode != 0 {
 			var _ *os.File
-			_, err = os.OpenFile(filePathForError, os.O_APPEND|os.O_WRONLY, 0777)
-			if err != nil {
-				panic(err)
-			}
 			command := exec.Command("php", ngFile)
 			buffer, err := command.StderrPipe()
 			if err != nil {
@@ -374,6 +420,7 @@ func StandByInput() (bool, error) {
 			if err := command.Wait(); err != nil {
 				//log.Fatal(err)
 			}
+			latestErrorMessage = string(slurp)
 
 			isPermissibleError = true
 			for _, value := range compiledPHPErrorMessages {
@@ -381,7 +428,7 @@ func StandByInput() (bool, error) {
 				if value.MatchString(string(slurp)) {
 					// phpスクリプトチェック用ファイルを殻にする
 					_ = os.Truncate(ngFile, 0)
-					file1.Seek(0, 0)
+					//file1.Seek(0, 0)
 					f, err := os.Open(okFile)
 					if err != nil {
 						panic(err)
@@ -390,7 +437,8 @@ func StandByInput() (bool, error) {
 					if err != nil {
 						panic(err)
 					}
-					file1.WriteString(string(source))
+					ioutil.WriteFile(ngFile, source, 0777)
+					//file1.WriteString(string(source))
 					isPermissibleError = false
 					break
 				}
@@ -398,7 +446,6 @@ func StandByInput() (bool, error) {
 			// 許容可能なエラーでは無い場合
 			if isPermissibleError == false {
 				os.Stdout.Write([]byte(colorWrapping("31", string(slurp))))
-				//fmt.Fprint(os.Stdout, "\033[0m")
 				prompt = " >>> "
 				continue
 			}
@@ -410,6 +457,34 @@ func StandByInput() (bool, error) {
 			continue
 		}
 		isPermissibleError = false
+
+		// NoticeやWarningなどのエラーを検出する
+		command = exec.Command("php", ngFile)
+		noneFatalErrorBuffer, _ := command.StderrPipe()
+		_ = command.Start()
+		success, _ := io.ReadAll(noneFatalErrorBuffer)
+		//fmt.Printf("...%v,,,,", string(success))
+		if err := command.Wait(); err != nil {
+			log.Fatal(err)
+		}
+		for _, value := range compiledPHPNoneErrorMessages {
+			if value.MatchString(string(success)) {
+				// 非Fatalエラーにマッチしたエラーの場合はロールバックさせる
+				// phpスクリプトチェック用ファイルを殻にする
+				_ = os.Truncate(ngFile, 0)
+				f, err := os.Open(okFile)
+				if err != nil {
+					panic(err)
+				}
+				source, err := ioutil.ReadAll(f)
+				if err != nil {
+					panic(err)
+				}
+				_ = ioutil.WriteFile(ngFile, source, 0777)
+				fmt.Print(colorWrapping("33", string(success)))
+				break
+			}
+		}
 
 		prompt = " >>> "
 
@@ -425,27 +500,32 @@ func StandByInput() (bool, error) {
 			panic(err)
 		}
 		os.Truncate(okFile, 0)
-		file2.Seek(0, 0)
-		file2.WriteString(string(b))
+		ioutil.WriteFile(okFile, b, 0777)
 		command = exec.Command("php", okFile)
-		// fmt.Println(command)
 		buffer, err := command.StdoutPipe()
 
 		if err != nil {
 			panic(err)
 		}
 		// bufferの読み取り開始
-		command.Start()
+		err = command.Start()
+		if err != nil {
+			panic(err)
+		}
 		// 第三引数にtrueを与えて出力結果を表示する
 		// 出力文字列の色を青にして出力
-		wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
+		_, outputSize := wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
 		err = command.Wait()
 		if (err != nil) && (err.Error() != "exit status 255") {
 			panic(err)
 		}
-		fmt.Println(colorWrapping("0", ""))
-		file1 = nil
-		file2 = nil
+		//fmt.Printf("outputSize: %d\n", outputSize)
+		if outputSize > 0 {
+			fmt.Print(colorWrapping("0", "\n"))
+		} else {
+			fmt.Print(colorWrapping("0", ""))
+		}
+
 	}
 	// 標準入力の終了
 
@@ -458,4 +538,64 @@ func hasIndex(slice []string, index int) bool {
 
 func colorWrapping(colorCode string, text string) string {
 	return "\033[" + colorCode + "m" + text + "\033[0m"
+}
+
+// popStirngToFile 指定したファイルの指定した行を削除する
+// 指定する行数は 1から開始させる
+func popStirngToFile(filePath string, row int) error {
+	// 削除する行の指定は -1 あるいは 1以上とする
+	// -1の場合は最後の行を削除する
+	if row != -1 && row <= 0 {
+		return fmt.Errorf("the row number is invalid")
+	}
+	var file *os.File
+	file, err := os.OpenFile(filePath, os.O_RDWR, 0777)
+	if err != nil {
+		return err
+	}
+	var bodyByte []byte
+	// 一行ずつ読み込んだ結果の文字列の配列
+	var bodyString []string
+	var temp []byte
+	bodyByte, err = ioutil.ReadAll(file)
+	for _, value := range bodyByte {
+		if value == '\n' {
+			s := string(temp)
+			if len(s) > 0 {
+				bodyString = append(bodyString, s)
+				temp = nil
+			}
+			continue
+		}
+		temp = append(temp, value)
+	}
+	if len(bodyString) == 1 {
+		// つまり <?php のみの場合
+		return nil
+	}
+	// 削除する行の指定が -1 の場合は最後の行を削除する
+	fmt.Printf("%v", bodyString)
+	if row == -1 {
+		bodyString = bodyString[:len(bodyString)-1]
+	} else {
+		bodyString = append(bodyString[:row-1], bodyString[row:]...)
+	}
+	//fmt.Printf("%v", bodyString)
+	// 削除した結果の[]string変数が => bodyString に格納されている
+	os.Truncate(filePath, 0)
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		panic(err)
+	}
+	//bodyString = append(bodyString, "\n")
+	connectedBodyString := strings.Join(bodyString, "\n")
+	//fmt.Println("connectedBodyString: ", connectedBodyString)
+	_, err = file.WriteString(connectedBodyString)
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Println("writtenSize: ", writtenSize)
+	file.WriteString("\n")
+	file.Close()
+	return nil
 }

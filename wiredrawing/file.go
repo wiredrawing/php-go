@@ -26,8 +26,10 @@ func FileOpen(filePath string, text string) (int, error) {
 
 	// 本関数は実行の度にファイルを開き,都度閉じる
 	defer (func() {
-		file.Close()
+		err := file.Close()
+		if err != nil {
+			panic(err)
+		}
 	})()
-
 	return bytesWritten, err
 }
