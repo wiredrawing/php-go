@@ -32,19 +32,19 @@ func regularsGarbageCollection() {
 	var mem runtime.MemStats
 	for {
 		runtime.ReadMemStats(&mem)
-		fmt.Printf("(1)Alloc:%d, (2)TotalAlloc:%d, (3)Sys:%d, (4)HeapAlloc:%d, (5)HeapSys:%d, (6)HeapReleased:%d\r\n",
-			mem.Alloc, // HeapAllocと同値
-			mem.TotalAlloc,
-			mem.Sys,       // OSから得た合計バイト数
-			mem.HeapAlloc, // Allocと同値
-			mem.HeapSys,
-			mem.HeapReleased, // OSへ返却されたヒープ
-		)
+		//fmt.Printf("(1)Alloc:%d, (2)TotalAlloc:%d, (3)Sys:%d, (4)HeapAlloc:%d, (5)HeapSys:%d, (6)HeapReleased:%d\r\n",
+		//	mem.Alloc, // HeapAllocと同値
+		//	mem.TotalAlloc,
+		//	mem.Sys,       // OSから得た合計バイト数
+		//	mem.HeapAlloc, // Allocと同値
+		//	mem.HeapSys,
+		//	mem.HeapReleased, // OSへ返却されたヒープ
+		//)
 		time.Sleep(5 * time.Second)
 		// fmt.Println("Executed gc")
 		runtime.GC()
 		//debug.FreeOSMemory()
-		if mem.Alloc > 3000000 {
+		if mem.Alloc > 1000000 {
 			runtime.GC()
 			//debug.FreeOSMemory()
 		}
@@ -217,7 +217,7 @@ func main() {
 	)
 
 	// GCを実行
-	//go regularsGarbageCollection()
+	go regularsGarbageCollection()
 
 	var exit chan int = make(chan int)
 	// 割り込み対処を実行するGoルーチン

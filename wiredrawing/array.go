@@ -42,9 +42,38 @@ func ArraySearch(needle string, haystack []string) int {
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
 func StdInput() string {
-
+	//var readString []string
 	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
-
+	//
+	//var s = 0
+	//for {
+	//	if s > 0 {
+	//		fmt.Print("  |> ")
+	//	}
+	//	scanner.Scan()
+	//	value := scanner.Text()
+	//
+	//	if value == "rollback" {
+	//		if len(readString) > 0 {
+	//			os.Stdout.Write([]byte("\033[1A"))
+	//			var lastString string = readString[len(readString)-1]
+	//			readString = readString[0 : len(readString)-1]
+	//			fmt.Print("\v  --- " + lastString + "\n")
+	//			//fmt.Printf("rollback: %v\n len %v", readString, len(readString))
+	//			continue
+	//		}
+	//	}
+	//	if value == "" {
+	//		break
+	//	}
+	//	readString = append(readString, value)
+	//	s++
+	//	//fmt.Printf("k: %v, v: %v\n", key, key)
+	//}
+	//if len(readString) > 0 {
+	//	return strings.Join(readString, "\n")
+	//}
+	//return ""
 	var ressult bool = scanner.Scan()
 	if ressult == true {
 		var textYouGet string = scanner.Text()

@@ -1,10 +1,11 @@
 package wiredrawing
 
 import (
-	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime"
+	"unsafe"
 )
 
 // LoadBuffer ---------------------------------------------------------------------
@@ -14,7 +15,7 @@ import (
 func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) (string, int) {
 	var currentLine int
 
-	const ensureLength int = 2048
+	const ensureLength int = 512
 
 	currentLine = 0
 	var outputSize int = 0
@@ -43,13 +44,19 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 				// 出力内容の表示フラグがtrueの場合のみ
 				if showBuffer == true {
 					outputSize += len(tempSlice)
-					fmt.Fprint(os.Stdout, string(tempSlice))
+					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
+					if err != nil {
+						log.Fatal(err)
+					}
 				}
 			} else {
 				// 出力内容の表示フラグがtrueの場合のみ
 				if showBuffer == true {
 					outputSize += len(readData)
-					fmt.Fprint(os.Stdout, string(readData))
+					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
+					if err != nil {
+						log.Fatal(err)
+					}
 				}
 			}
 		}

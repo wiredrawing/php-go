@@ -88,36 +88,11 @@ func init() {
 
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput() (bool, error) {
-	var previousLine = new(int)
+	//var previousLine = new(int)
+	var previousLine int = 0
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
-	var PHPErrorMesssages []string = []string{
-		`Warning:[ ]+?Uncaught[ ]+?Error:[ ]+?Closure[ ]+?object[ ]+?cannot[ ]+?have[ ]+?propecatrties`,
-		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?ArgumentCountError:[ ]+?Too[ ]+?few[ ]+?arguments[ ]+?to[ ]+?function[ ]+?(.)*?::(.)*?`,
-		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Closure[ ]+?object[ ]+?cannot[ ]+?have[ ]+?properties`,
-		`Fatal[ ]+?error:[ ]+?Call[ ]+?to[ ]+?undefined[ ]+?function[ ]+?(.+)?\(\) in`,
-		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Call[ ]+to[ ]+?undefined[ ]+?function[ ]+?.+?`,
-		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?Error:[ ]+?Class[ ]+'.+?'[ ]+not[ ]+found[ ]+in`,
-		`Fatal[ ]+?error:[ ]+?Uncaught[ ]+?ArgumentCountError:[ ]+?Too[ ]+?few[ ]+?arguments[ ]+?to[ ]+?function[ ]+?{closure}\(\),[ ]+?([0-9]+?)[ ]+?passed in`,
-	}
-	var compiledPHPErrorMessages = make([]*regexp.Regexp, 0, 2)
-	for _, value := range PHPErrorMesssages {
-		var r *regexp.Regexp = regexp.MustCompile(value)
-		compiledPHPErrorMessages = append(compiledPHPErrorMessages, r)
-	}
-	// PHPの Fatal Error 以外のエラーメッセージの正規表現を事前コンパイルする
-	var PHPNoneErrorMessages []string = []string{
-		`Warning:[ ]+?Use of undefined constant (.+)? - assumed '(.+)?' (this will throw an Error in a future version of PHP)`,
-		`Warning:[ ]+?(.+)?\(\)[ ]+?expects[ ]+?at[ ]+?least[ ]+?[0-9]+?[ ]+?parameter(s)?,[ ]+?[0-9]+?[ ]+?given[ ]+?in`,
-		`Warning:[ ]+?Use[ ]+?of[ ]+?undefined[ ]+?constant[ ]+?(.+)?[ ]+?\-[ ]+?assumed[ ]+?'(.+)?'[ ]+?\(this will throw an Error in a future version of PHP\)[ ]+?in`,
-		`Notice:[ ]+?Undefined index: .+?`,
-		`Notice:[ ]+?Undefined variable: .+? in (.+)? on line (.+)?`,
-		`Deprecated:[ ]+?Methods with the same name as their class will not be constructors in a future version of PHP; (.+)? has a deprecated constructor`,
-	}
-	var compiledPHPNoneErrorMessages = make([]*regexp.Regexp, 0, 2)
-	for _, value := range PHPNoneErrorMessages {
-		var r *regexp.Regexp = regexp.MustCompile(value)
-		compiledPHPNoneErrorMessages = append(compiledPHPNoneErrorMessages, r)
-	}
+	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error,`
+	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 
 	// ターミナルを終了させるためのキーワード群
 	var wordsToExit = make([]string, 0, 32)
@@ -142,7 +117,7 @@ func StandByInput() (bool, error) {
 	okFile = dotDir + "\\" + okFile
 	filePathForError = dotDir + "\\" + filePathForError
 
-	*previousLine = 0
+	previousLine = 0
 
 	// ----------------------------------------------
 	// 標準入力を可能にする
@@ -164,7 +139,7 @@ func StandByInput() (bool, error) {
 		inputText = strings.TrimSpace(rawInputText)
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
-			runtime.GC()
+			//runtime.GC()
 			//debug.FreeOSMemory()
 			continue
 		}
@@ -208,25 +183,6 @@ func StandByInput() (bool, error) {
 				if isDeleted != nil {
 					panic(isDeleted)
 				}
-				//fp, err := os.Open(ngFile)
-				//if err != nil {
-				//	panic(err)
-				//}
-				//s := bufio.NewScanner(fp)
-				//var rollbackData []string
-				//for s.Scan() {
-				//	rollbackData = append(rollbackData, s.Text())
-				//}
-				//replacedRollbackData := rollbackData[:len(rollbackData)-1]
-				//fp.Close()
-				//if len(replacedRollbackData) > 1 {
-				//	os.Truncate(ngFile, 0)
-				//	fp, _ = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
-				//	for _, value := range replacedRollbackData {
-				//		fp.WriteString(value + "\n")
-				//	}
-				//	fp.Close()
-				//}
 			} else {
 				var isDeleted error
 				isDeleted = popStirngToFile(okFile, -1)
@@ -248,8 +204,6 @@ func StandByInput() (bool, error) {
 
 		if tokens[0] == "delete" {
 			{
-				//file1.Close()
-				//file2.Close()
 				var fileBuffer []string
 				file, err := os.Open(ngFile)
 				if err != nil {
@@ -285,12 +239,12 @@ func StandByInput() (bool, error) {
 
 				// validation用ファイルを空に
 				//file1.Close()
-				os.Truncate(ngFile, 0)
+				_ = os.Truncate(ngFile, 0)
 				file, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
 				if err != nil {
 					panic(err)
 				}
-				file.Seek(0, 0)
+				_, _ = file.Seek(0, 0)
 				for _, value := range fileBuffer {
 					// 行末に改行文字を入力
 					_, err := file.WriteString(value + "\n")
@@ -298,17 +252,14 @@ func StandByInput() (bool, error) {
 						panic(err)
 					}
 				}
-				file.Close()
+				_ = file.Close()
 
-				// 実行用用ファイルを空に
-				// ngFile => okFile に内容をコピ
-				//file2.Close()
-				os.Truncate(okFile, 0)
+				_ = os.Truncate(okFile, 0)
 				file, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
 				if err != nil {
 					panic(err)
 				}
-				file.Seek(0, 0)
+				_, _ = file.Seek(0, 0)
 				for _, value := range fileBuffer {
 					// 行末に改行文字を入力
 					_, err := file.WriteString(value + "\n")
@@ -316,7 +267,7 @@ func StandByInput() (bool, error) {
 						panic(err)
 					}
 				}
-				file.Close()
+				_ = file.Close()
 
 				// 再度削除したphpファイルを実行して古いバッファを捨てる
 				command := exec.Command("php", okFile)
@@ -325,9 +276,9 @@ func StandByInput() (bool, error) {
 					panic(err)
 				}
 				command.Start()
-				*previousLine = 0
+				previousLine = 0
 				// 第三引数にfalseを与えて,実行結果の出力を破棄する
-				wiredrawing.LoadBuffer(buffer, previousLine, false, false, "34")
+				wiredrawing.LoadBuffer(buffer, &previousLine, false, false, "34")
 				fmt.Println("")
 				continue
 			}
@@ -397,13 +348,14 @@ func StandByInput() (bool, error) {
 		// --------------------------------------------
 		// 一旦入力内容が正しく終了するかどうかを検証
 		// --------------------------------------------
-		command := exec.Command("php", ngFile)
-
-		var e = command.Run()
-		if e != nil {
-			// PHPコマンドの実行に失敗した場合
-		}
-		exitCode := command.ProcessState.ExitCode()
+		//command := exec.Command("php", ngFile)
+		//
+		//var e = command.Run()
+		//if e != nil {
+		//	// PHPコマンドの実行に失敗した場合
+		//}
+		//exitCode := command.ProcessState.ExitCode()
+		exitCode := wiredrawing.ValidateVNgFile(ngFile)
 		// エラーコードが0でない場合
 		if exitCode != 0 {
 			var _ *os.File
@@ -422,56 +374,23 @@ func StandByInput() (bool, error) {
 			}
 			latestErrorMessage = string(slurp)
 
-			isPermissibleError = true
-			for _, value := range compiledPHPErrorMessages {
-				// 規定したエラーメッセージにマッチした場合はokFileの中身をngFileにコピーする
-				if value.MatchString(string(slurp)) {
-					// phpスクリプトチェック用ファイルを殻にする
-					_ = os.Truncate(ngFile, 0)
-					//file1.Seek(0, 0)
-					f, err := os.Open(okFile)
-					if err != nil {
-						panic(err)
-					}
-					source, err := ioutil.ReadAll(f)
-					if err != nil {
-						panic(err)
-					}
-					ioutil.WriteFile(ngFile, source, 0777)
-					//file1.WriteString(string(source))
-					isPermissibleError = false
-					break
-				}
+			isPermissibleError = false
+			if parseErrorRegex.MatchString(string(slurp)) {
+				isPermissibleError = true
 			}
+			//for _, value := range compiledPHPErrorMessages {
+			//	// 規定したエラーメッセージにマッチした場合はokFileの中身をngFileにコピーする
+			//	if value.MatchString(string(slurp)) {
+			//
+			//		break
+			//	}
+			//}
 			// 許容可能なエラーでは無い場合
 			if isPermissibleError == false {
 				os.Stdout.Write([]byte(colorWrapping("31", string(slurp))))
-				prompt = " >>> "
-				continue
-			}
-
-			// 継続可能な許容エラーの場合
-			isPermissibleError = true
-			fmt.Fprint(os.Stdout, "\033[33m")
-			prompt = " ... "
-			continue
-		}
-		isPermissibleError = false
-
-		// NoticeやWarningなどのエラーを検出する
-		command = exec.Command("php", ngFile)
-		noneFatalErrorBuffer, _ := command.StderrPipe()
-		_ = command.Start()
-		success, _ := io.ReadAll(noneFatalErrorBuffer)
-		//fmt.Printf("...%v,,,,", string(success))
-		if err := command.Wait(); err != nil {
-			log.Fatal(err)
-		}
-		for _, value := range compiledPHPNoneErrorMessages {
-			if value.MatchString(string(success)) {
-				// 非Fatalエラーにマッチしたエラーの場合はロールバックさせる
 				// phpスクリプトチェック用ファイルを殻にする
 				_ = os.Truncate(ngFile, 0)
+				//file1.Seek(0, 0)
 				f, err := os.Open(okFile)
 				if err != nil {
 					panic(err)
@@ -480,27 +399,69 @@ func StandByInput() (bool, error) {
 				if err != nil {
 					panic(err)
 				}
-				_ = ioutil.WriteFile(ngFile, source, 0777)
-				fmt.Print(colorWrapping("33", string(success)))
-				break
+				ioutil.WriteFile(ngFile, source, 0777)
+				//file1.WriteString(string(source))
+				isPermissibleError = false
+				prompt = " >>> "
+				continue
 			}
-		}
 
+			// 継続可能な許容エラーの場合
+			isPermissibleError = true
+			fmt.Print(colorWrapping("37", "\tERROR: "+string(slurp)))
+			fmt.Fprint(os.Stdout, "\033[33m")
+			prompt = " ... "
+			continue
+		}
+		isPermissibleError = false
+
+		// NoticeやWarningなどのエラーを検出する
+		command := exec.Command("php", ngFile)
+		noneFatalErrorBuffer, _ := command.StderrPipe()
+		_ = command.Start()
+		success, _ := io.ReadAll(noneFatalErrorBuffer)
+		if err := command.Wait(); err != nil {
+			log.Fatal(err)
+		}
+		if len(success) > 0 {
+			// 単純に標準エラーに何かしら出力されていたらエラーとする
+			_ = os.Truncate(ngFile, 0)
+			f, err := os.Open(okFile)
+			if err != nil {
+				//panic(err)
+			}
+			source, err := ioutil.ReadAll(f)
+			if err != nil {
+				//panic(err)
+			}
+			_ = ioutil.WriteFile(ngFile, source, 0777)
+			fmt.Print(colorWrapping("33", string(success)))
+			continue
+		}
 		prompt = " >>> "
 
 		// --------------------------------------------
 		// 正常終了の場合は ngFile中身をokFileにコピー
 		// --------------------------------------------
-		f, err := os.Open(ngFile)
+		ngf, err := os.Open(ngFile)
+		okf, err := os.Create(okFile)
+		_, err = io.Copy(okf, ngf)
+		//fmt.Printf("書き込まれたsize: %d\n", size)
+		ngf.Close()
+		okf.Close()
 		if err != nil {
 			panic(err)
 		}
-		b, err := ioutil.ReadAll(f)
-		if err != nil {
-			panic(err)
-		}
-		os.Truncate(okFile, 0)
-		ioutil.WriteFile(okFile, b, 0777)
+		//if err != nil {
+		//	panic(err)
+		//}
+		//b, err := ioutil.ReadAll(f)
+		//if err != nil {
+		//	panic(err)
+		//}
+		//os.Truncate(okFile, 0)
+		//ioutil.WriteFile(okFile, b, 0777)
+
 		command = exec.Command("php", okFile)
 		buffer, err := command.StdoutPipe()
 
@@ -514,7 +475,7 @@ func StandByInput() (bool, error) {
 		}
 		// 第三引数にtrueを与えて出力結果を表示する
 		// 出力文字列の色を青にして出力
-		_, outputSize := wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
+		_, outputSize := wiredrawing.LoadBuffer(buffer, &previousLine, true, false, "34")
 		err = command.Wait()
 		if (err != nil) && (err.Error() != "exit status 255") {
 			panic(err)
@@ -525,7 +486,7 @@ func StandByInput() (bool, error) {
 		} else {
 			fmt.Print(colorWrapping("0", ""))
 		}
-
+		latestErrorMessage = ""
 	}
 	// 標準入力の終了
 
@@ -534,6 +495,10 @@ func StandByInput() (bool, error) {
 
 func hasIndex(slice []string, index int) bool {
 	return (0 <= index) && (index < len(slice))
+}
+
+func ColorWrapping(colorCode string, text string) string {
+	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
 
 func colorWrapping(colorCode string, text string) string {
@@ -574,7 +539,7 @@ func popStirngToFile(filePath string, row int) error {
 		return nil
 	}
 	// 削除する行の指定が -1 の場合は最後の行を削除する
-	fmt.Printf("%v", bodyString)
+	//fmt.Printf("%v", bodyString)
 	if row == -1 {
 		bodyString = bodyString[:len(bodyString)-1]
 	} else {
