@@ -20,7 +20,7 @@ import (
 const newLine string = "\n"
 
 // 入力内容を保持する変数
-var inputText = ""
+//var inputText = ""
 
 var err error
 
@@ -87,9 +87,15 @@ func init() {
 }
 
 // StandByInput 標準入力を待ち受ける関数
-func StandByInput() (bool, error) {
+func StandByInput(phpPath string) (bool, error) {
+	// phpPathが未指定の場合はハイフンが設定されているため
+	// それ以外の場合は指定したphpパスで実行する
+	var phpExecutePath = "php"
+	if phpPath != "-" {
+		phpExecutePath = phpPath
+	}
 	//var previousLine = new(int)
-	var previousLine int = 0
+	var previousLine = 0
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
 	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error,`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
@@ -127,6 +133,8 @@ func StandByInput() (bool, error) {
 	var isPermissibleError = false
 	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	var latestErrorMessage = ""
+	var inputText string
+	var previousInputText = ""
 	for {
 		if isPermissibleError == true {
 			fmt.Print("\033[33m")
@@ -136,6 +144,7 @@ func StandByInput() (bool, error) {
 		fmt.Print(colorWrapping("0", ""))
 		// 両端のスペースを削除
 		rawInputText := wiredrawing.StdInput()
+		previousInputText = inputText
 		inputText = strings.TrimSpace(rawInputText)
 		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
@@ -194,6 +203,9 @@ func StandByInput() (bool, error) {
 					panic(isDeleted)
 				}
 			}
+			if len(previousInputText) > 0 {
+				fmt.Println(" ... " + colorWrapping("31", " - "+previousInputText))
+			}
 			continue
 		}
 
@@ -203,86 +215,12 @@ func StandByInput() (bool, error) {
 		tokens := strings.Split(inputText, " ")
 
 		if tokens[0] == "delete" {
-			{
-				var fileBuffer []string
-				file, err := os.Open(ngFile)
-				if err != nil {
-					panic(err)
-				}
-				scanner := bufio.NewScanner(file)
-				for scanner.Scan() {
-					{
-						fileBuffer = append(fileBuffer, scanner.Text())
-					}
-				}
-				// 削除したい対象の行数を取得する
-				var indexToDelete int
-				if hasIndex(tokens, 1) != true {
-					fmt.Println("削除したい行数を指定してください")
-					continue
-				}
-				indexToDelete, err = strconv.Atoi(tokens[1])
-				if err != nil {
-					panic(err)
-				}
-
-				// 指定したindexがスライスの範囲内かどうかを検証
-				if (len(fileBuffer) > indexToDelete) != true {
-					fmt.Println("範囲外のindexが指定されました")
-					continue
-				}
-				fileBuffer = append(fileBuffer[:indexToDelete], fileBuffer[indexToDelete+1:]...)
-				var closeError = file.Close()
-				if closeError != nil {
-					panic(closeError)
-				}
-
-				// validation用ファイルを空に
-				//file1.Close()
-				_ = os.Truncate(ngFile, 0)
-				file, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
-				if err != nil {
-					panic(err)
-				}
-				_, _ = file.Seek(0, 0)
-				for _, value := range fileBuffer {
-					// 行末に改行文字を入力
-					_, err := file.WriteString(value + "\n")
-					if err != nil {
-						panic(err)
-					}
-				}
-				_ = file.Close()
-
-				_ = os.Truncate(okFile, 0)
-				file, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
-				if err != nil {
-					panic(err)
-				}
-				_, _ = file.Seek(0, 0)
-				for _, value := range fileBuffer {
-					// 行末に改行文字を入力
-					_, err := file.WriteString(value + "\n")
-					if err != nil {
-						panic(err)
-					}
-				}
-				_ = file.Close()
-
-				// 再度削除したphpファイルを実行して古いバッファを捨てる
-				command := exec.Command("php", okFile)
-				buffer, err := command.StdoutPipe()
-				if err != nil {
-					panic(err)
-				}
-				command.Start()
-				previousLine = 0
-				// 第三引数にfalseを与えて,実行結果の出力を破棄する
-				wiredrawing.LoadBuffer(buffer, &previousLine, false, false, "34")
-				fmt.Println("")
-				continue
+			var changedPreviousLine = deletePreviousCode(tokens, ngFile, okFile)
+			// 戻り値が<-1>の場合は,deleteコマンドの入力に不備があった場合
+			if changedPreviousLine != -1 {
+				previousLine = changedPreviousLine
 			}
-
+			continue
 		}
 
 		// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
@@ -317,24 +255,22 @@ func StandByInput() (bool, error) {
 
 		// cat と入力すると現在まで入力している内容を出力する
 		if inputText == "cat" {
+			catFile, err := os.Open(ngFile)
+			if err != nil {
+				panic(err)
+			}
+			tempScanner := bufio.NewScanner(catFile)
 
-			(func() {
-				catFile, err := os.Open(ngFile)
-				if err != nil {
-					panic(err)
-				}
-				tempScanner := bufio.NewScanner(catFile)
-
-				var index = 0
-				var indexStr = ""
-				for tempScanner.Scan() {
-					indexStr = fmt.Sprintf("%03d", index)
-					fmt.Print(colorWrapping("34", indexStr) + ": ")
-					fmt.Println(colorWrapping("32", tempScanner.Text()))
-					index++
-				}
-			})()
-
+			var index = 0
+			var indexStr = ""
+			fmt.Println("")
+			for tempScanner.Scan() {
+				indexStr = fmt.Sprintf("%03d", index)
+				fmt.Print(colorWrapping("34", indexStr) + ": ")
+				fmt.Println(colorWrapping("32", tempScanner.Text()))
+				index++
+			}
+			fmt.Println("")
 			continue
 		}
 
@@ -408,7 +344,7 @@ func StandByInput() (bool, error) {
 
 			// 継続可能な許容エラーの場合
 			isPermissibleError = true
-			fmt.Print(colorWrapping("37", "\tERROR: "+string(slurp)))
+			//fmt.Print(colorWrapping("37", "\tERROR: "+string(slurp)))
 			fmt.Fprint(os.Stdout, "\033[33m")
 			prompt = " ... "
 			continue
@@ -462,7 +398,8 @@ func StandByInput() (bool, error) {
 		//os.Truncate(okFile, 0)
 		//ioutil.WriteFile(okFile, b, 0777)
 
-		command = exec.Command("php", okFile)
+		fmt.Println(phpExecutePath)
+		command = exec.Command(phpExecutePath, okFile)
 		buffer, err := command.StdoutPipe()
 
 		if err != nil {
@@ -563,4 +500,89 @@ func popStirngToFile(filePath string, row int) error {
 	file.WriteString("\n")
 	file.Close()
 	return nil
+}
+
+// deletePreviousCode 直前に入力したコードを削除する
+func deletePreviousCode(tokens []string, ngFile string, okFile string) int {
+	var previousLine = 0
+	{
+		var fileBuffer []string
+		file, err := os.Open(ngFile)
+		if err != nil {
+			panic(err)
+		}
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			{
+				fileBuffer = append(fileBuffer, scanner.Text())
+			}
+		}
+		// 削除したい対象の行数を取得する
+		var indexToDelete int
+		if hasIndex(tokens, 1) != true {
+			fmt.Println("削除したい行数を指定してください")
+			return -1
+		}
+		indexToDelete, err = strconv.Atoi(tokens[1])
+		if err != nil {
+			panic(err)
+		}
+
+		// 指定したindexがスライスの範囲内かどうかを検証
+		if (len(fileBuffer) > indexToDelete) != true {
+			fmt.Println("範囲外のindexが指定されました")
+			return -1
+		}
+		fileBuffer = append(fileBuffer[:indexToDelete], fileBuffer[indexToDelete+1:]...)
+		var closeError = file.Close()
+		if closeError != nil {
+			panic(closeError)
+		}
+
+		// validation用ファイルを空に
+		//file1.Close()
+		_ = os.Truncate(ngFile, 0)
+		file, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
+		if err != nil {
+			panic(err)
+		}
+		_, _ = file.Seek(0, 0)
+		for _, value := range fileBuffer {
+			// 行末に改行文字を入力
+			_, err := file.WriteString(value + "\n")
+			if err != nil {
+				panic(err)
+			}
+		}
+		_ = file.Close()
+
+		_ = os.Truncate(okFile, 0)
+		file, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
+		if err != nil {
+			panic(err)
+		}
+		_, _ = file.Seek(0, 0)
+		for _, value := range fileBuffer {
+			// 行末に改行文字を入力
+			_, err := file.WriteString(value + "\n")
+			if err != nil {
+				panic(err)
+			}
+		}
+		_ = file.Close()
+
+		// 再度削除したphpファイルを実行して古いバッファを捨てる
+		command := exec.Command("php", okFile)
+		buffer, err := command.StdoutPipe()
+		if err != nil {
+			panic(err)
+		}
+		command.Start()
+		// 第三引数にfalseを与えて,実行結果の出力を破棄する
+		wiredrawing.LoadBuffer(buffer, &previousLine, false, false, "34")
+		fmt.Println("")
+		return -1
+	}
+	// 正常に動作した最終のバイト数を返却する
+	return previousLine
 }

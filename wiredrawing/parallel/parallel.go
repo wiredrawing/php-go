@@ -29,7 +29,8 @@ func InterruptProcess(exit chan int, observer chan os.Signal) {
 			exit <- 3
 		} else if s == os.Interrupt {
 			if runtime.GOOS != "darwin" {
-				fmt.Print("[os.Interrupt].\r\n")
+				fmt.Println("Input the word 'yes' or 'YES' or 'y' to exit the program.")
+				//fmt.Print("[os.Interrupt].\r\n")
 			}
 			// 割り込みを無視
 			exit <- 4

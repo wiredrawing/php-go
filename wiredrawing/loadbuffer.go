@@ -21,7 +21,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 	var outputSize int = 0
 	// whenError == true の場合バッファ内容を返却してやる
 	var bufferWhenError string
-	os.Stdout.WriteString("\033[" + colorCode + "m")
+	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
@@ -70,7 +70,7 @@ func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenEr
 	// 使用したメモリを開放してみる
 	runtime.GC()
 	// コンソールのカラーをもとにもどす
-	os.Stdout.WriteString("\033[0m")
+	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
 
 	return bufferWhenError, outputSize

@@ -3,15 +3,13 @@ package main
 
 import (
 	"crypto/sha256"
+	"flag"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"golang.org/x/sys/windows"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
-	"php-go/wiredrawing"
 	"php-go/wiredrawing/parallel"
 	"runtime"
 	"time"
@@ -58,7 +56,12 @@ func hash(filepath string) string {
 		log.Println(err)
 		return ""
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			panic(err)
+		}
+	}(file)
 
 	h := sha256.New()
 	readBytes, _ := ioutil.ReadAll(file)
@@ -69,96 +72,100 @@ func hash(filepath string) string {
 
 func main() {
 
+	// コマンドライン引数を取得
+	phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
+	flag.Parse()
+
 	var _ bool
 	var err error
-	var targetFileName string = ""
-	var workingDirectory string = ""
-
-	// 監視対象のファイル名
-	var filePathForSurveillance string = ""
+	//var targetFileName string = ""
+	//var workingDirectory string = ""
+	//
+	//// 監視対象のファイル名
+	//var filePathForSurveillance string = ""
 
 	// 割り込み監視用
 	var signal_chan chan os.Signal = make(chan os.Signal)
 
-	// []string型でコマンドライン引数を受け取る
-	var arguments = os.Args
+	//// []string型でコマンドライン引数を受け取る
+	//var arguments = os.Args
 	// もしファイル名が指定されている場合はファイル監視処理に入る
 
-	if arrayIndexExists(arguments, 1) {
-		targetFileName = arguments[1]
-		workingDirectory, err = os.Getwd()
-		fmt.Println(workingDirectory)
-		if err != nil {
-			// 作業ディレクトリが取得できない場合
-			panic(err)
-		}
-		filePathForSurveillance = workingDirectory + "\\" + targetFileName
-		_, err = os.Stat(filePathForSurveillance)
-		if err == nil {
-			// ファイルが既に存在する場合は内容をtruncateする
-			_ = os.Truncate(filePathForSurveillance, 0)
-		} else {
-			// ファイルが存在しない場合は新規作成する
-			_, err := os.Create(filePathForSurveillance)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		// Create new watcher.
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer watcher.Close()
-
-		// Start listening for events.
-		go func() {
-			// ファイル内容のハッシュ計算用に保持
-			//var previousHash []byte
-			//var hashedValue []byte
-			var hashedValue string
-			var previousHash string
-			for {
-				select {
-				case event, ok := <-watcher.Events:
-					if !ok {
-						return
-					}
-					if event.Has(fsnotify.Write) && event.Name == filePathForSurveillance {
-						hashedValue = hash(filePathForSurveillance)
-						//surveillanceFile, _ := os.Open(event.Name)
-						//readByte, _ := ioutil.ReadAll(surveillanceFile)
-						//h := sha256.New()
-						//h.Write(readByte)
-						//hashedValue = h.Sum(nil)
-						log.Println("Hashed value: ", string(hashedValue))
-						if hashedValue == previousHash {
-							continue
-						}
-						// 古いハッシュを更新
-						previousHash = hashedValue
-						command := exec.Command("php", filePathForSurveillance)
-						buffer, _ := command.StdoutPipe()
-						err := command.Start()
-						if err != nil {
-							return
-						}
-						var previousLine *int = new(int)
-						*previousLine = 0
-						_, _ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
-						fmt.Println("")
-					}
-				case err, ok := <-watcher.Errors:
-					if !ok {
-						return
-					}
-					log.Println("error:", err)
-				}
-			}
-		}()
-		watcher.Add(workingDirectory)
-	}
+	//if arrayIndexExists(arguments, 1) {
+	//	targetFileName = arguments[1]
+	//	workingDirectory, err = os.Getwd()
+	//	fmt.Println(workingDirectory)
+	//	if err != nil {
+	//		// 作業ディレクトリが取得できない場合
+	//		panic(err)
+	//	}
+	//	filePathForSurveillance = workingDirectory + "\\" + targetFileName
+	//	_, err = os.Stat(filePathForSurveillance)
+	//	if err == nil {
+	//		// ファイルが既に存在する場合は内容をtruncateする
+	//		_ = os.Truncate(filePathForSurveillance, 0)
+	//	} else {
+	//		// ファイルが存在しない場合は新規作成する
+	//		_, err := os.Create(filePathForSurveillance)
+	//		if err != nil {
+	//			panic(err)
+	//		}
+	//	}
+	//
+	//	// Create new watcher.
+	//	watcher, err := fsnotify.NewWatcher()
+	//	if err != nil {
+	//		log.Fatal(err)
+	//	}
+	//	defer watcher.Close()
+	//
+	//	// Start listening for events.
+	//	go func() {
+	//		// ファイル内容のハッシュ計算用に保持
+	//		//var previousHash []byte
+	//		//var hashedValue []byte
+	//		var hashedValue string
+	//		var previousHash string
+	//		for {
+	//			select {
+	//			case event, ok := <-watcher.Events:
+	//				if !ok {
+	//					return
+	//				}
+	//				if event.Has(fsnotify.Write) && event.Name == filePathForSurveillance {
+	//					hashedValue = hash(filePathForSurveillance)
+	//					//surveillanceFile, _ := os.Open(event.Name)
+	//					//readByte, _ := ioutil.ReadAll(surveillanceFile)
+	//					//h := sha256.New()
+	//					//h.Write(readByte)
+	//					//hashedValue = h.Sum(nil)
+	//					log.Println("Hashed value: ", string(hashedValue))
+	//					if hashedValue == previousHash {
+	//						continue
+	//					}
+	//					// 古いハッシュを更新
+	//					previousHash = hashedValue
+	//					command := exec.Command("php", filePathForSurveillance)
+	//					buffer, _ := command.StdoutPipe()
+	//					err := command.Start()
+	//					if err != nil {
+	//						return
+	//					}
+	//					var previousLine *int = new(int)
+	//					*previousLine = 0
+	//					_, _ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
+	//					fmt.Println("")
+	//				}
+	//			case err, ok := <-watcher.Errors:
+	//				if !ok {
+	//					return
+	//				}
+	//				log.Println("error:", err)
+	//			}
+	//		}
+	//	}()
+	//	watcher.Add(workingDirectory)
+	//}
 
 	// *previousLine = 0
 
@@ -249,7 +256,7 @@ func main() {
 	// waiter.Add(1)
 	// go inputter.StandByInput(waiter)
 	// waiter.Wait()
-	_, err = inputter.StandByInput()
+	_, err = inputter.StandByInput(*phpPath)
 	if err != nil {
 		panic(err)
 	}
