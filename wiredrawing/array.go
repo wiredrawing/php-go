@@ -3,8 +3,15 @@ package wiredrawing
 import (
 	"bufio"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"log"
 	"os"
+	"os/exec"
+	"regexp"
+	"runtime"
 	"strings"
+	"unsafe"
 )
 
 // InArray ------------------------------------------------
@@ -105,3 +112,177 @@ func StdInput() string {
 func colorWrapping(colorCode string, text string) string {
 	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
+
+type PhpExecuter struct {
+	PhpPath            string
+	okFile             string
+	ngFile             string
+	previousLine       int
+	IsPermissibleError bool
+}
+
+func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
+	if phpPath == "" {
+		pe.PhpPath = "php"
+	}
+	pe.PhpPath = phpPath
+}
+
+func (pe *PhpExecuter) Execute() (int, error) {
+	var showBuffer bool = true
+	var colorCode string = "34"
+	// isValidate == true の場合はngFileを実行(事前実行)
+	command := exec.Command(pe.PhpPath, pe.okFile)
+
+	buffer, err := command.StdoutPipe()
+	if err != nil {
+		return 0, err
+	}
+	err = command.Start()
+	if err != nil {
+		return 0, err
+	}
+	var currentLine int
+
+	const ensureLength int = 512
+
+	currentLine = 0
+	var outputSize int = 0
+	// whenError == true の場合バッファ内容を返却してやる
+	var bufferWhenError string
+	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
+	for {
+		readData := make([]byte, ensureLength)
+		n, err := buffer.Read(readData)
+		if (err != nil) && (err != io.EOF) {
+			os.Stderr.Write([]byte(err.Error()))
+			break
+		}
+		if n == 0 {
+			break
+		}
+		// 正味のバッファを取り出す
+		readData = readData[:n]
+		bufferWhenError += string(readData)
+
+		from := currentLine
+		to := currentLine + n
+		if (currentLine + n) >= pe.previousLine {
+			if from < pe.previousLine && pe.previousLine <= to {
+				diff := pe.previousLine - currentLine
+				tempSlice := readData[diff:]
+				// 出力内容の表示フラグがtrueの場合のみ
+				if showBuffer == true {
+					outputSize += len(tempSlice)
+					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+			} else {
+				// 出力内容の表示フラグがtrueの場合のみ
+				if showBuffer == true {
+					outputSize += len(readData)
+					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
+					if err != nil {
+						log.Fatal(err)
+					}
+				}
+			}
+		}
+		currentLine += n
+		readData = nil
+	}
+	pe.previousLine = currentLine
+	// 使用したメモリを開放してみる
+	runtime.GC()
+	// コンソールのカラーをもとにもどす
+	_, _ = os.Stdout.WriteString("\033[0m")
+	//debug.FreeOSMemory()
+	return outputSize, nil
+}
+
+// DetectFatalError ----------------------------------------
+// 事前にPHPの実行結果がエラーであるかどうかを判定する
+func (pe *PhpExecuter) DetectFatalError() ([]byte, error) {
+	// PHPのエラーメッセージの正規表現を事前コンパイルする
+	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error,`
+	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
+	pe.IsPermissibleError = false
+	c := exec.Command(pe.PhpPath, pe.ngFile)
+	// コマンド実行失敗時
+	if err := c.Run(); err != nil {
+		// throw
+	}
+
+	if c.ProcessState.ExitCode() == 0 {
+		// 終了コードが正常な場合,何もしない
+		return []byte{}, nil
+	}
+	// 終了コードが不正な場合,FatalErrorを取得する
+	c = exec.Command(pe.PhpPath, pe.ngFile)
+	buffer, _ := c.StderrPipe()
+	_ = c.Start()
+	loadedByte, _ := ioutil.ReadAll(buffer)
+	// エラー内容がシンタックスエラーなら許容する
+	if parseErrorRegex.MatchString(string(loadedByte)) {
+		pe.IsPermissibleError = true
+	}
+	// シンタックスエラーのみ許容する
+	_ = c.Wait()
+	return loadedByte, nil
+}
+
+func (pe *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
+	c := exec.Command(pe.PhpPath, pe.ngFile)
+	buffer, err := c.StderrPipe()
+	if err != nil {
+		return []byte{}, err
+	}
+	_ = c.Start()
+	loadedByte, err := ioutil.ReadAll(buffer)
+	_ = c.Wait()
+	return loadedByte, nil
+}
+
+func (pe *PhpExecuter) GetFatalError() []byte {
+	c := exec.Command(pe.PhpPath, pe.ngFile)
+	if buffer, err := c.StderrPipe(); err != nil {
+		panic(err)
+	} else {
+		_ = c.Start()
+		loadedByte, err := ioutil.ReadAll(buffer)
+		if err != nil {
+			panic(err)
+		}
+		_ = c.Wait()
+		return loadedByte
+	}
+}
+
+func (pe *PhpExecuter) SetOkFile(okFile string) {
+	pe.okFile = okFile
+}
+func (pe *PhpExecuter) SetNgFile(ngFile string) {
+	pe.ngFile = ngFile
+}
+func (pe *PhpExecuter) WriteToNg(input string) int {
+	size, err := FileOpen(pe.ngFile, input)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return size
+}
+
+//func (pe *PhpExecuter) WriteToOk(input string) (int, error) {
+//	return FileOpen(pe.okFile, input)
+//}
+
+//type PhpExecuterInterface interface {
+//	SetPhpExcutePath(string) bool
+//	SetOkFile(string) bool
+//	SetNgFile(string) bool
+//	ExecutePhp() string
+//	LoadBuffer() []byte
+//	GetFatalError() []byte
+//}
