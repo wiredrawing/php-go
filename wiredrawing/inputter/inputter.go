@@ -151,13 +151,12 @@ func StandByInput(phpPath string) (bool, error) {
 		//previousInputText = inputText
 		inputText = strings.TrimSpace(rawInputText)
 
-		// 入力内容が exit ならアプリケーションを終了
 		if len(inputText) == 0 {
 			runtime.GC()
 			continue
 		}
 
-		if inputText == "!rollback" {
+		if inputText == "rollback" {
 			popStirngToFile(ngFile, -1)
 			errorBytes, _ := php.DetectFatalError()
 			if len(errorBytes) > 0 {
@@ -200,9 +199,12 @@ func StandByInput(phpPath string) (bool, error) {
 			continue
 		}
 
+		if inputText == "ls" {
+
+		}
 		// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
 		// ファイルサイズを空にする
-		if inputText == "!clear" {
+		if inputText == "clear" {
 			// バリデーション用のファイルを空にする
 			ng, err := os.Create(ngFile)
 			ok, err := os.Open(okFile)
@@ -218,7 +220,7 @@ func StandByInput(phpPath string) (bool, error) {
 		}
 
 		// cat と入力すると現在まで入力している内容を出力する
-		if inputText == "!cat" {
+		if inputText == "cat" {
 			catFile, err := os.Open(ngFile)
 			if err != nil {
 				panic(err)

@@ -4,13 +4,13 @@
 
 # Go言語で初期化し開発準備をする
 
-
+!
 
 ## 初期化コマンド
 
 ```
 go mod init <something package name>
-
+# 例 go mod init wiredrwaing-socket
 
 # go: creating new go.mod: <something package name>
 

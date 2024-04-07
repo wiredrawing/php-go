@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"unsafe"
 )
@@ -72,11 +73,9 @@ func StdInput() string {
 
 				if value == "rollback" {
 					if len(readString) > 0 {
-						os.Stdout.Write([]byte("\033[1A"))
 						var lastString string = readString[len(readString)-1]
 						readString = readString[0 : len(readString)-1]
-						fmt.Print("\v  --- " + lastString + "\n")
-						//fmt.Printf("rollback: %v\n len %v", readString, len(readString))
+						fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
 						continue
 					}
 				} else if value == "cat" {
@@ -144,12 +143,12 @@ func (pe *PhpExecuter) Execute() (int, error) {
 	}
 	var currentLine int
 
-	const ensureLength int = 512
+	const ensureLength int = 64
 
 	currentLine = 0
 	var outputSize int = 0
 	// whenError == true の場合バッファ内容を返却してやる
-	var bufferWhenError string
+	//var bufferWhenError string
 	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
 	for {
 		readData := make([]byte, ensureLength)
@@ -163,7 +162,7 @@ func (pe *PhpExecuter) Execute() (int, error) {
 		}
 		// 正味のバッファを取り出す
 		readData = readData[:n]
-		bufferWhenError += string(readData)
+		//bufferWhenError += string(readData)
 
 		from := currentLine
 		to := currentLine + n
@@ -194,8 +193,10 @@ func (pe *PhpExecuter) Execute() (int, error) {
 		readData = nil
 	}
 	pe.previousLine = currentLine
+	_ = command.Wait()
 	// 使用したメモリを開放してみる
 	runtime.GC()
+	debug.FreeOSMemory()
 	// コンソールのカラーをもとにもどす
 	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
