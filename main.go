@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"php-go/wiredrawing"
 	"php-go/wiredrawing/parallel"
 	"runtime"
@@ -87,17 +88,35 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 	}
 	// 一時ファイルの作成
 	currentDir, _ := os.Getwd()
-	fpForValidate, err := os.CreateTemp(currentDir, "validation.php")
+
+	// 過去に起動した一時ファイルを削除する
+
+	globs, err := filepath.Glob(currentDir + "./PHP_GO_validation*")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("fpForValidate.Name(): %s\r\n", fpForValidate.Name())
+	for _, glob := range globs {
+		_ = os.Remove(glob)
+	}
+	// 起動時点の一時ファイルを作成
+	fpForValidate, err := os.CreateTemp(currentDir, "PHP_GO_validation.php")
+	defer func() {
+		err := fpForValidate.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Printf("fpForValidate.Name(): %s\r\n", fpForValidate.Name())
 
 	// ユーザーが入力したファイル
 	manualFp, err := os.Open(filePathForSurveillance)
 	if err != nil {
 		panic(err)
 	}
+	var previousExcecuteCode []string
 	for {
 		// php実行時の出力行数を保持
 		select {
@@ -118,25 +137,41 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 				}
 				// 古いハッシュを更新
 				previousHash = hashedValue
-				//
+				if len(previousExcecuteCode) > 0 {
+					nextExecutedCode, _ := wiredrawing.File(filePathForSurveillance)
+					if len(previousExcecuteCode) >= len(nextExecutedCode) {
+						for index := 0; index < len(previousExcecuteCode); index++ {
+							if previousExcecuteCode[index] != nextExecutedCode[index] {
+								php.SetPreviousList(0)
+								break
+							}
+						}
+					}
+					previousExcecuteCode = nextExecutedCode
+				} else {
+					previousExcecuteCode, _ = wiredrawing.File(filePathForSurveillance)
+				}
 				io.Copy(fpForValidate, manualFp)
 				php.SetOkFile(filePathForSurveillance)
 				php.SetNgFile(filePathForSurveillance)
 				// 致命的なエラー
 				if bytes, err := php.DetectFatalError(); err != nil || len(bytes) > 0 {
 					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-					fmt.Println(string(bytes))
+					fmt.Println(inputter.ColorWrapping("31", string(bytes)))
 					continue
 				}
 				if bytes, err := php.DetectErrorExceptFatalError(); (err != nil) || len(bytes) > 0 {
-					fmt.Println(string(bytes))
+					fmt.Println(inputter.ColorWrapping("31", string(bytes)))
 					continue
 				}
-				_, err := php.Execute()
+				fmt.Println(" --> ")
+				size, err := php.Execute()
 				if err != nil {
 					panic(err)
 				}
-				fmt.Println("")
+				if size > 0 {
+					fmt.Println("")
+				}
 				//command := exec.Command(*phpPath, filePathForSurveillance)
 				//buffer, _ := command.StdoutPipe()
 				//err := command.Start()
@@ -156,7 +191,7 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 	}
 }
 func main() {
-
+	//go spinner()
 	// コマンドライン引数を取得
 	phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
 	surveillanceFile := flag.String("surveillance", DefaultSurveillanceFileName, "監視対象のファイル名を入力")
@@ -354,10 +389,22 @@ func main() {
 	// waiter.Add(1)
 	// go inputter.StandByInput(waiter)
 	// waiter.Wait()
+	defer func() {
+		if err := recover(); err != nil {
+			if err, ok := err.(error); ok {
+				fmt.Println(err)
+				_, err = inputter.StandByInput(*phpPath)
+			} else {
+				fmt.Println("errorの型アサーションに失敗")
+			}
+
+		}
+	}()
 	_, err = inputter.StandByInput(*phpPath)
 	if err != nil {
 		panic(err)
 	}
+
 }
 
 func arrayIndexExists(array []string, index int) bool {

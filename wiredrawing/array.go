@@ -120,6 +120,11 @@ type PhpExecuter struct {
 	IsPermissibleError bool
 }
 
+// SetPreviousList ----------------------------------------
+// 前回のセーブポイントを変更する
+func (pe *PhpExecuter) SetPreviousList(number int) {
+	pe.previousLine = number
+}
 func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 	if phpPath == "" {
 		pe.PhpPath = "php"
@@ -143,7 +148,7 @@ func (pe *PhpExecuter) Execute() (int, error) {
 	}
 	var currentLine int
 
-	const ensureLength int = 64
+	const ensureLength int = 128
 
 	currentLine = 0
 	var outputSize int = 0
@@ -206,6 +211,19 @@ func (pe *PhpExecuter) Execute() (int, error) {
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
 func (pe *PhpExecuter) DetectFatalError() ([]byte, error) {
+
+	defer func() {
+		if err := recover(); err != nil {
+			if err, ok := err.(error); ok {
+				fmt.Println(err)
+				return
+				//return []byte{}, err
+			}
+		}
+		return
+		//return []byte{}, errors.New("failed to detect fatal error")
+	}()
+	//panic(errors.New("意図しないエラー"))
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
 	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error,`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
@@ -216,21 +234,30 @@ func (pe *PhpExecuter) DetectFatalError() ([]byte, error) {
 		// throw
 	}
 
-	if c.ProcessState.ExitCode() == 0 {
-		// 終了コードが正常な場合,何もしない
-		return []byte{}, nil
-	}
 	// 終了コードが不正な場合,FatalErrorを取得する
 	c = exec.Command(pe.PhpPath, pe.ngFile)
 	buffer, _ := c.StderrPipe()
 	_ = c.Start()
-	loadedByte, _ := ioutil.ReadAll(buffer)
+	loadedByte, err := io.ReadAll(buffer)
+	if err != nil {
+		return []byte{}, err
+	}
+	_ = c.Wait()
+
+	if c.ProcessState.ExitCode() == 0 {
+		if len(loadedByte) > 0 {
+			return loadedByte, nil
+		}
+		// 終了コードが正常な場合,何もしない
+		return []byte{}, nil
+	}
+	//loadedByte, _ := ioutil.ReadAll(buffer)
 	// エラー内容がシンタックスエラーなら許容する
 	if parseErrorRegex.MatchString(string(loadedByte)) {
 		pe.IsPermissibleError = true
 	}
 	// シンタックスエラーのみ許容する
-	_ = c.Wait()
+
 	return loadedByte, nil
 }
 
@@ -287,3 +314,37 @@ func (pe *PhpExecuter) WriteToNg(input string) int {
 //	LoadBuffer() []byte
 //	GetFatalError() []byte
 //}
+
+// PHPのfile関数と同様の処理をエミュレーション
+func File(filePath string) ([]string, error) {
+	var fileRows []string = make([]string, 0, 512)
+	//fmt.Printf("len(fileRows): %v\n", len(fileRows))
+	// 引数に渡されたファイルを読みこむ
+	fp, err := os.Open(filePath)
+	if err != nil {
+		return []string{}, err
+	}
+	allBuffer, err := io.ReadAll(fp)
+	// Handling error.
+	if err != nil {
+		return []string{}, err
+	}
+
+	var singleRow []byte
+	var rowsNumber int = 0
+
+	for _, value := range allBuffer {
+		if string(value) == ("\n") {
+			//fmt.Println(string(singleRow))
+			fileRows = append(fileRows, string(singleRow))
+			// 1行分をリセット
+			singleRow = []byte{}
+			rowsNumber++
+			continue
+		}
+		singleRow = append(singleRow, value)
+	}
+	//fmt.Printf("fileRows: %v\n", fileRows)
+	fileRows = fileRows[:rowsNumber]
+	return fileRows, nil
+}

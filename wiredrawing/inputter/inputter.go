@@ -247,6 +247,8 @@ func StandByInput(phpPath string) (bool, error) {
 		// Fatal Error以外を検出する
 		// ----------------------------------------------------------------
 		fatalError, _ := php.DetectFatalError()
+		//fmt.Printf("fatalError ===> %v", fatalError)
+		//fmt.Printf("e ===> %v", e)
 		if len(fatalError) > 0 {
 			if php.IsPermissibleError == true {
 				prompt = " ... "
@@ -270,21 +272,21 @@ func StandByInput(phpPath string) (bool, error) {
 		// ----------------------------------------------------------------
 		// None Fatal Error一群を検出する
 		// ----------------------------------------------------------------
-		noneFatalError, _ := php.DetectErrorExceptFatalError()
-		if len(noneFatalError) > 0 {
-			{
-				fmt.Println(colorWrapping("33", string(noneFatalError)))
-				// 事前検証用のfileの中身を本実行用fileの中身と同じにする
-				if source, err := os.Open(okFile); err != nil {
-					panic(err)
-				} else {
-					// 現在のOKfileの中身を取得
-					destination, _ := os.Create(ngFile)
-					io.Copy(destination, source)
-				}
-				continue
-			}
-		}
+		//noneFatalError, _ := php.DetectErrorExceptFatalError()
+		//if len(noneFatalError) > 0 {
+		//	{
+		//		fmt.Println(colorWrapping("33", string(noneFatalError)))
+		//		// 事前検証用のfileの中身を本実行用fileの中身と同じにする
+		//		if source, err := os.Open(okFile); err != nil {
+		//			panic(err)
+		//		} else {
+		//			// 現在のOKfileの中身を取得
+		//			destination, _ := os.Create(ngFile)
+		//			io.Copy(destination, source)
+		//		}
+		//		continue
+		//	}
+		//}
 		// Fatalエラーそれ以外のエラーともに検出されなかった場合
 		// ngFileの中身をokFileにコピー
 		if ok, err := os.Create(okFile); err != nil {
