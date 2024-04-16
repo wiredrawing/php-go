@@ -114,10 +114,12 @@ func colorWrapping(colorCode string, text string) string {
 
 type PhpExecuter struct {
 	PhpPath            string
+	IsPermissibleError bool
+	ErrorBuffer        []byte
+	SuccessBuffer      []byte
 	okFile             string
 	ngFile             string
 	previousLine       int
-	IsPermissibleError bool
 }
 
 // SetPreviousList ----------------------------------------
@@ -210,7 +212,7 @@ func (pe *PhpExecuter) Execute() (int, error) {
 
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
-func (pe *PhpExecuter) DetectFatalError() ([]byte, error) {
+func (pe *PhpExecuter) DetectFatalError() ([]byte, bool, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -240,25 +242,26 @@ func (pe *PhpExecuter) DetectFatalError() ([]byte, error) {
 	_ = c.Start()
 	loadedByte, err := io.ReadAll(buffer)
 	if err != nil {
-		return []byte{}, err
+		// 実行結果の出力, PHPのFatal Errorかどうか, Goのエラー
+		return []byte{}, true, err
 	}
 	_ = c.Wait()
 
 	if c.ProcessState.ExitCode() == 0 {
 		if len(loadedByte) > 0 {
-			return loadedByte, nil
+			// Fatal Error in PHP ではない
+			return loadedByte, false, nil
 		}
 		// 終了コードが正常な場合,何もしない
-		return []byte{}, nil
+		return []byte{}, false, nil
 	}
 	//loadedByte, _ := ioutil.ReadAll(buffer)
 	// エラー内容がシンタックスエラーなら許容する
 	if parseErrorRegex.MatchString(string(loadedByte)) {
 		pe.IsPermissibleError = true
 	}
-	// シンタックスエラーのみ許容する
-
-	return loadedByte, nil
+	// シンタックスエラーのみ許容するが Fatal Error in PHP である
+	return loadedByte, true, nil
 }
 
 func (pe *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {

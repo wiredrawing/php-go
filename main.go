@@ -155,10 +155,16 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 				php.SetOkFile(filePathForSurveillance)
 				php.SetNgFile(filePathForSurveillance)
 				// 致命的なエラー
-				if bytes, err := php.DetectFatalError(); err != nil || len(bytes) > 0 {
-					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-					fmt.Println(inputter.ColorWrapping("31", string(bytes)))
-					continue
+				if bytes, isFatal, err := php.DetectFatalError(); err != nil || len(bytes) > 0 {
+					if isFatal == true {
+						// Fatal Errorが検出された場合はエラーメッセージを表示して終了
+						fmt.Println(inputter.ColorWrapping("31", string(bytes)))
+						continue
+					} else {
+						// Fatal Errorが検出された場合はエラーメッセージを表示して終了
+						fmt.Println(inputter.ColorWrapping("33", string(bytes)))
+						continue
+					}
 				}
 				if bytes, err := php.DetectErrorExceptFatalError(); (err != nil) || len(bytes) > 0 {
 					fmt.Println(inputter.ColorWrapping("31", string(bytes)))
@@ -368,7 +374,6 @@ func main() {
 		var code = 0
 		for {
 			code = <-exit
-
 			if code == 1 {
 				os.Exit(code)
 			} else if code == 4 {

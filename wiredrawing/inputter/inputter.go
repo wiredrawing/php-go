@@ -158,7 +158,7 @@ func StandByInput(phpPath string) (bool, error) {
 
 		if inputText == "rollback" {
 			popStirngToFile(ngFile, -1)
-			errorBytes, _ := php.DetectFatalError()
+			errorBytes, _, _ := php.DetectFatalError()
 			if len(errorBytes) > 0 {
 				prompt = " ... "
 			} else {
@@ -246,15 +246,20 @@ func StandByInput(phpPath string) (bool, error) {
 		// ----------------------------------------------------------------
 		// Fatal Error以外を検出する
 		// ----------------------------------------------------------------
-		fatalError, _ := php.DetectFatalError()
+		fatalError, isFatal, _ := php.DetectFatalError()
 		//fmt.Printf("fatalError ===> %v", fatalError)
 		//fmt.Printf("e ===> %v", e)
 		if len(fatalError) > 0 {
 			if php.IsPermissibleError == true {
 				prompt = " ... "
 			} else {
-				// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-				fmt.Println(colorWrapping("31", string(fatalError)))
+				if isFatal == true {
+					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
+					fmt.Println(colorWrapping("31", string(fatalError)))
+				} else {
+					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
+					fmt.Println(colorWrapping("33", string(fatalError)))
+				}
 				// 事前検証用のfileの中身を本実行用fileの中身と同じにする
 				if source, err := os.Open(okFile); err != nil {
 					panic(err)
