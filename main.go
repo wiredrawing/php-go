@@ -17,7 +17,6 @@ import (
 	"php-go/wiredrawing/parallel"
 	"runtime"
 	"time"
-
 	// ここは独自パッケージ
 
 	// _をつけた場合は パッケージ内のinit関数のみ実行される
@@ -155,14 +154,16 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 				php.SetOkFile(filePathForSurveillance)
 				php.SetNgFile(filePathForSurveillance)
 				// 致命的なエラー
-				if bytes, isFatal, err := php.DetectFatalError(); err != nil || len(bytes) > 0 {
-					if isFatal == true {
-						// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-						fmt.Println(inputter.ColorWrapping("31", string(bytes)))
-						continue
-					} else {
-						// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-						fmt.Println(inputter.ColorWrapping("33", string(bytes)))
+				isFatal, err := php.DetectFatalError()
+				if isFatal == true {
+					// 致命的なエラーの場合
+					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
+					fmt.Println(inputter.ColorWrapping("31", string(php.ErrorBuffer)))
+					continue
+				} else {
+					if len(php.ErrorBuffer) > 0 {
+						// 非Fatal Error
+						fmt.Println(inputter.ColorWrapping("33", string(php.ErrorBuffer)))
 						continue
 					}
 				}
@@ -178,15 +179,6 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 				if size > 0 {
 					fmt.Println("")
 				}
-				//command := exec.Command(*phpPath, filePathForSurveillance)
-				//buffer, _ := command.StdoutPipe()
-				//err := command.Start()
-				//if err != nil {
-				//	return
-				//}
-				//_, _ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
-				//fmt.Println("")
-				//fmt.Printf("*previousLine: %d\r\n", *previousLine)
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -258,95 +250,8 @@ func main() {
 
 		// Start listening for events.
 		go ExecuteSurveillanceFile(watcher, filePathForSurveillance, phpPath)
-		//go func() {
-		//	// ファイル内容のハッシュ計算用に保持
-		//	//var previousHash []byte
-		//	//var hashedValue []byte
-		//	var hashedValue string
-		//	var previousHash string
-		//	for {
-		//		select {
-		//		case event, ok := <-watcher.Events:
-		//			if !ok {
-		//				return
-		//			}
-		//			if event.Has(fsnotify.Write) && event.Name == filePathForSurveillance {
-		//				hashedValue = hash(filePathForSurveillance)
-		//				//surveillanceFile, _ := os.Open(event.Name)
-		//				//readByte, _ := ioutil.ReadAll(surveillanceFile)
-		//				//h := sha256.New()
-		//				//h.Write(readByte)
-		//				//hashedValue = h.Sum(nil)
-		//				log.Println("Hashed value: ", hashedValue)
-		//				if hashedValue == previousHash {
-		//					continue
-		//				}
-		//				// 古いハッシュを更新
-		//				previousHash = hashedValue
-		//				//
-		//				command := exec.Command(*phpPath, filePathForSurveillance)
-		//				buffer, _ := command.StdoutPipe()
-		//				err := command.Start()
-		//				if err != nil {
-		//					return
-		//				}
-		//				var previousLine *int = new(int)
-		//				_, _ = wiredrawing.LoadBuffer(buffer, previousLine, true, false, "34")
-		//				fmt.Println("")
-		//				fmt.Printf("*previousLine: %d\r\n", *previousLine)
-		//			}
-		//		case err, ok := <-watcher.Errors:
-		//			if !ok {
-		//				return
-		//			}
-		//			log.Println("error:", err)
-		//		}
-		//	}
-		//}()
 		watcher.Add(workingDirectory)
 	}
-
-	// *previousLine = 0
-
-	// // コマンドの実行結果をPipeで受け取る
-	// command := exec.Command("php", "-i")
-	// buffer, err := command.StdoutPipe()
-
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// command.Start()
-
-	// wiredrawing.LoadBuffer(buffer, previousLine)
-
-	//// ディレクトリのwatcherを作成
-	//watcher, watcherErr := fsnotify.NewWatcher()
-	//if watcherErr != nil {
-	//	panic(watcherErr)
-	//}
-	//defer func(watcher *fsnotify.Watcher) {
-	//	err := watcher.Close()
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//}(watcher)
-	//
-	//go func() {
-	//	for {
-	//		select {
-	//		case event, ok := <-watcher.Events:
-	//			if !ok {
-	//				return
-	//			}
-	//			if event.Has(fsnotify.Write) {
-	//				fmt.Println("書き込みイベント発生")
-	//			}
-	//		case err := <-watcher.Errors:
-	//			fmt.Println(err)
-	//		}
-	//	}
-	//
-	//}()
 
 	// コンソールの監視
 	signal.Notify(

@@ -150,7 +150,7 @@ func (pe *PhpExecuter) Execute() (int, error) {
 	}
 	var currentLine int
 
-	const ensureLength int = 128
+	const ensureLength int = 256
 
 	currentLine = 0
 	var outputSize int = 0
@@ -212,7 +212,7 @@ func (pe *PhpExecuter) Execute() (int, error) {
 
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
-func (pe *PhpExecuter) DetectFatalError() ([]byte, bool, error) {
+func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -223,45 +223,44 @@ func (pe *PhpExecuter) DetectFatalError() ([]byte, bool, error) {
 			}
 		}
 		return
-		//return []byte{}, errors.New("failed to detect fatal error")
 	}()
 	//panic(errors.New("意図しないエラー"))
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
 	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error,`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 	pe.IsPermissibleError = false
-	c := exec.Command(pe.PhpPath, pe.ngFile)
-	// コマンド実行失敗時
-	if err := c.Run(); err != nil {
-		// throw
-	}
 
 	// 終了コードが不正な場合,FatalErrorを取得する
-	c = exec.Command(pe.PhpPath, pe.ngFile)
+	c := exec.Command(pe.PhpPath, pe.ngFile)
 	buffer, _ := c.StderrPipe()
 	_ = c.Start()
 	loadedByte, err := io.ReadAll(buffer)
 	if err != nil {
 		// 実行結果の出力, PHPのFatal Errorかどうか, Goのエラー
-		return []byte{}, true, err
+		return false, err
+		//return []byte{}, true, err
 	}
 	_ = c.Wait()
 
 	if c.ProcessState.ExitCode() == 0 {
 		if len(loadedByte) > 0 {
 			// Fatal Error in PHP ではない
-			return loadedByte, false, nil
+			// また標準エラー出力はオブジェクトから取得する
+			pe.ErrorBuffer = loadedByte
+			return false, nil
+			//return loadedByte, false, nil
 		}
 		// 終了コードが正常な場合,何もしない
-		return []byte{}, false, nil
+		pe.ErrorBuffer = []byte{}
+		return false, nil
 	}
-	//loadedByte, _ := ioutil.ReadAll(buffer)
 	// エラー内容がシンタックスエラーなら許容する
 	if parseErrorRegex.MatchString(string(loadedByte)) {
 		pe.IsPermissibleError = true
 	}
 	// シンタックスエラーのみ許容するが Fatal Error in PHP である
-	return loadedByte, true, nil
+	pe.ErrorBuffer = loadedByte
+	return true, nil
 }
 
 func (pe *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
@@ -304,19 +303,6 @@ func (pe *PhpExecuter) WriteToNg(input string) int {
 	}
 	return size
 }
-
-//func (pe *PhpExecuter) WriteToOk(input string) (int, error) {
-//	return FileOpen(pe.okFile, input)
-//}
-
-//type PhpExecuterInterface interface {
-//	SetPhpExcutePath(string) bool
-//	SetOkFile(string) bool
-//	SetNgFile(string) bool
-//	ExecutePhp() string
-//	LoadBuffer() []byte
-//	GetFatalError() []byte
-//}
 
 // PHPのfile関数と同様の処理をエミュレーション
 func File(filePath string) ([]string, error) {
