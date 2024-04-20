@@ -14,14 +14,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"php-go/wiredrawing"
+	"php-go/wiredrawing/inputter"
 	"php-go/wiredrawing/parallel"
 	"runtime"
 	"time"
 	// ここは独自パッケージ
-
-	// _をつけた場合は パッケージ内のinit関数のみ実行される
-
-	"php-go/wiredrawing/inputter"
 	//"golang.org/x/sys/windows"
 )
 
@@ -263,6 +260,15 @@ func main() {
 		windows.SIGINT,
 		windows.SIGTERM,
 		windows.SIGQUIT,
+		windows.SIGTRAP,
+		windows.SIGSEGV,
+		windows.SIGABRT,
+		windows.Signal(0x0B),
+		windows.Signal(0x0C),
+		windows.Signal(0x0D),
+		windows.Signal(0x0E),
+		windows.Signal(0x0F),
+		windows.Signal(0x10),
 		windows.Signal(0x13),
 		windows.Signal(0x14), // Windowsの場合 SIGTSTPを認識しないためリテラルで指定する
 	)
@@ -290,24 +296,19 @@ func main() {
 			}
 		}
 	}(exit)
-
 	// ----------------------------------------------
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
-	// var waiter *sync.WaitGroup = new(sync.WaitGroup)
-	// waiter.Add(1)
-	// go inputter.StandByInput(waiter)
-	// waiter.Wait()
 	defer func() {
 		if err := recover(); err != nil {
 			if err, ok := err.(error); ok {
 				fmt.Println(err)
 				_, err = inputter.StandByInput(*phpPath)
 			} else {
+				fmt.Printf("%T\r\n", err)
 				fmt.Println("errorの型アサーションに失敗")
 			}
-
 		}
 	}()
 	_, err = inputter.StandByInput(*phpPath)
@@ -315,8 +316,4 @@ func main() {
 		panic(err)
 	}
 
-}
-
-func arrayIndexExists(array []string, index int) bool {
-	return index >= 0 && index < len(array)
 }

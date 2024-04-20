@@ -2,6 +2,7 @@ package wiredrawing
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -233,6 +234,12 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	// 終了コードが不正な場合,FatalErrorを取得する
 	c := exec.Command(pe.PhpPath, pe.ngFile)
 	buffer, _ := c.StderrPipe()
+	// 戻り値自体がインターフェースである以上,*os.File型へは代入できない
+	// そのためどうしても具象型にしたい場合は型アサーションを使う
+	buffer, ok := buffer.(*os.File)
+	if ok != true {
+		panic(errors.New("failed to convert io.Reader to *os.File"))
+	}
 	_ = c.Start()
 	loadedByte, err := io.ReadAll(buffer)
 	if err != nil {
