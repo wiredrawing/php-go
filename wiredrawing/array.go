@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -121,6 +122,7 @@ type PhpExecuter struct {
 	okFile             string
 	ngFile             string
 	previousLine       int
+	connection         net.Conn
 }
 
 // SetPreviousList ----------------------------------------
@@ -136,6 +138,9 @@ func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 }
 
 func (pe *PhpExecuter) Execute() (int, error) {
+
+	//pe.passTCPServer("Execute() is called.")
+
 	var showBuffer bool = true
 	var colorCode string = "34"
 	// isValidate == true の場合はngFileを実行(事前実行)
@@ -182,6 +187,9 @@ func (pe *PhpExecuter) Execute() (int, error) {
 				if showBuffer == true {
 					outputSize += len(tempSlice)
 					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
+					if pe.connection != nil {
+						pe.passTCPServer(string(tempSlice))
+					}
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -191,6 +199,9 @@ func (pe *PhpExecuter) Execute() (int, error) {
 				if showBuffer == true {
 					outputSize += len(readData)
 					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
+					if pe.connection != nil {
+						pe.passTCPServer(string(readData))
+					}
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -227,7 +238,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	}()
 	//panic(errors.New("意図しないエラー"))
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
-	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error,`
+	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 	pe.IsPermissibleError = false
 
@@ -343,4 +354,26 @@ func File(filePath string) ([]string, error) {
 	//fmt.Printf("fileRows: %v\n", fileRows)
 	fileRows = fileRows[:rowsNumber]
 	return fileRows, nil
+}
+
+func (pe *PhpExecuter) passTCPServer(s string) {
+
+	if pe.connection == nil {
+		addr := net.TCPAddr{
+			IP:   net.ParseIP("127.0.0.1"),
+			Port: 8888,
+		}
+		connect, err := net.DialTCP("tcp", nil, &addr)
+		if err != nil {
+			panic(err)
+		}
+		pe.connection = connect
+	}
+	_, _ = pe.connection.Write([]byte(s))
+	//for {
+	//	select {
+	//	case s := <-stringChannel:
+	//		_, _ = pe.connection.Write([]byte(s))
+	//	}
+	//}
 }

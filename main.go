@@ -185,7 +185,12 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 		}
 	}
 }
+
 func main() {
+
+	var _ bool
+	var err error
+
 	//go spinner()
 	// コマンドライン引数を取得
 	phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
@@ -197,9 +202,6 @@ func main() {
 		// デフォルトのままの場合は<php>に設定
 		*phpPath = "php"
 	}
-
-	var _ bool
-	var err error
 
 	//
 	// 監視対象のファイル名
