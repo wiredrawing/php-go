@@ -242,6 +242,27 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 	pe.IsPermissibleError = false
 
+	// 事前にPHPコマンド <php -l file-name>でシンタックスエラーのみを先にチェックする
+	syntax := exec.Command(pe.PhpPath, "-l", pe.ngFile)
+	syntexBuffer, err := syntax.StderrPipe()
+	if err != nil {
+		panic(err)
+	}
+	_ = syntax.Start()
+	// シンタックスエラーがでている場合
+	loaded, err := io.ReadAll(syntexBuffer)
+	if err != nil {
+		panic(err)
+	}
+	_ = syntax.Wait()
+	if syntax.ProcessState.ExitCode() != 0 {
+		// シンタックスエラーがあった場合
+		//fmt.Printf("Syntax Error: <<<%v>>>\n", string(loaded))
+		pe.IsPermissibleError = true
+		pe.ErrorBuffer = loaded
+		return true, nil
+	}
+
 	// 終了コードが不正な場合,FatalErrorを取得する
 	c := exec.Command(pe.PhpPath, pe.ngFile)
 	buffer, _ := c.StderrPipe()
@@ -260,6 +281,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	}
 	_ = c.Wait()
 
+	//fmt.Printf("ExitCode: %v\n", c.ProcessState.ExitCode())
 	if c.ProcessState.ExitCode() == 0 {
 		if len(loadedByte) > 0 {
 			// Fatal Error in PHP ではない

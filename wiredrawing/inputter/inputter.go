@@ -116,6 +116,23 @@ func StandByInput(phpPath string) (bool, error) {
 	okFile = dotDir + "\\" + okFile
 	filePathForError = dotDir + "\\" + filePathForError
 
+	// OSの一時ファイル作成に任せる
+	okFileTemp, err := os.CreateTemp("", ".success.dat.")
+	if err != nil {
+		panic(err)
+	}
+	// <?php を 一行目に書き込む
+	_, _ = okFileTemp.Write([]byte("<?php " + "\n"))
+	okFile = okFileTemp.Name()
+
+	ngFileTemp, err := os.CreateTemp("", ".validation.dat.")
+	if err != nil {
+		panic(err)
+	}
+	// <?php を 一行目に書き込む
+	_, _ = ngFileTemp.Write([]byte("<?php " + "\n"))
+	ngFile = ngFileTemp.Name()
+
 	//previousLine = 0
 
 	// ----------------------------------------------
@@ -205,6 +222,7 @@ func StandByInput(phpPath string) (bool, error) {
 			// 出力を削除
 			_, _ = fmt.Fprintln(ioutil.Discard, writtenSize, err)
 			fmt.Print("\033[0m")
+			php.IsPermissibleError = false
 			prompt = " >>> "
 			runtime.GC()
 			debug.FreeOSMemory()
