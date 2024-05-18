@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"php-go/wiredrawing"
+	"phpgo/wiredrawing"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -86,7 +86,7 @@ func init() {
 }
 
 // StandByInput 標準入力を待ち受ける関数
-func StandByInput(phpPath string) (bool, error) {
+func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 	// phpPathが未指定の場合はハイフンが設定されているため
 	// それ以外の場合は指定したphpパスで実行する
 	var phpExecutePath = "php"
@@ -139,7 +139,7 @@ func StandByInput(phpPath string) (bool, error) {
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
-	var prompt = " >>> "
+	var prompt = inputPrompt
 	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	//var latestErrorMessage = ""
 	var inputText string

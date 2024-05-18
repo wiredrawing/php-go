@@ -3,7 +3,6 @@ package main
 
 import (
 	"crypto/sha256"
-	"flag"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"golang.org/x/sys/windows"
@@ -13,9 +12,10 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"php-go/wiredrawing"
-	"php-go/wiredrawing/inputter"
-	"php-go/wiredrawing/parallel"
+	"phpgo/cmd"
+	"phpgo/wiredrawing"
+	"phpgo/wiredrawing/inputter"
+	"phpgo/wiredrawing/parallel"
 	"runtime"
 	"time"
 	// ここは独自パッケージ
@@ -186,16 +186,23 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 	}
 }
 
+func stringp(s string) *string {
+	return &s
+}
 func main() {
+	commandConfig := cmd.Execute()
 
 	var _ bool
 	var err error
 
 	//go spinner()
 	// コマンドライン引数を取得
-	phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
-	surveillanceFile := flag.String("surveillance", DefaultSurveillanceFileName, "監視対象のファイル名を入力")
-	flag.Parse()
+	var phpPath *string = stringp(commandConfig["phppath"])
+	var surveillanceFile *string = stringp(commandConfig["surveillance"])
+	var prompt *string = stringp(commandConfig["prompt"])
+	//phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
+	//surveillanceFile := flag.String("surveillance", DefaultSurveillanceFileName, "監視対象のファイル名を入力")
+	//flag.Parse()
 
 	// phpの実行パスを設定
 	if *phpPath == "-" {
@@ -265,6 +272,7 @@ func main() {
 		windows.SIGTRAP,
 		windows.SIGSEGV,
 		windows.SIGABRT,
+		windows.Signal(0x0A),
 		windows.Signal(0x0B),
 		windows.Signal(0x0C),
 		windows.Signal(0x0D),
@@ -306,14 +314,14 @@ func main() {
 		if err := recover(); err != nil {
 			if err, ok := err.(error); ok {
 				fmt.Println(err)
-				_, err = inputter.StandByInput(*phpPath)
+				_, err = inputter.StandByInput(*phpPath, *prompt)
 			} else {
 				fmt.Printf("%T\r\n", err)
 				fmt.Println("errorの型アサーションに失敗")
 			}
 		}
 	}()
-	_, err = inputter.StandByInput(*phpPath)
+	_, err = inputter.StandByInput(*phpPath, *prompt)
 	if err != nil {
 		panic(err)
 	}
