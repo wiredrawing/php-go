@@ -29,7 +29,7 @@ func InterruptProcess(exit chan int, observer chan os.Signal) {
 			exit <- 3
 		} else if s == os.Interrupt {
 			if runtime.GOOS != "darwin" {
-				fmt.Println("Input the word 'yes' or 'YES' or 'y' to exit the program.")
+				//fmt.Println("[os.Interrupt]")
 				//fmt.Print("[os.Interrupt].\r\n")
 			}
 			// 割り込みを無視
@@ -48,5 +48,7 @@ func InterruptProcess(exit chan int, observer chan os.Signal) {
 			fmt.Print("[Unknown syscall].\r\n")
 			exit <- -1
 		}
+		//// 変数 observerから中身を取り出すまで ここで処理がとまる
+		//s, _ = <-observer // 待機
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"golang.org/x/sys/windows"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"phpgo/wiredrawing/inputter"
 	"phpgo/wiredrawing/parallel"
 	"runtime"
+	"strings"
 	"time"
 	// ここは独自パッケージ
 	//"golang.org/x/sys/windows"
@@ -53,7 +53,7 @@ func regularsGarbageCollection() {
 func hash(filepath string) string {
 	file, err := os.Open(filepath)
 	if err != nil {
-		log.Println(err)
+		//log.Println(err)
 		return ""
 	}
 	defer func(file *os.File) {
@@ -62,12 +62,18 @@ func hash(filepath string) string {
 			panic(err)
 		}
 	}(file)
-
 	h := sha256.New()
 	readBytes, _ := ioutil.ReadAll(file)
-	h.Write(readBytes)
+	fmt.Printf("readBytes: %v\r\n", readBytes)
+	size, err := h.Write(readBytes)
+	fmt.Printf("size: %v\r\n", size)
+	if err != nil {
+		log.Println(err)
+		return ""
+	}
 	hashedValue := h.Sum(nil)
-	return string(hashedValue)
+	var hashedValueString string = string(hashedValue)
+	return hashedValueString
 }
 
 const DefaultSurveillanceFileName string = "-"
@@ -94,24 +100,14 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 	for _, glob := range globs {
 		_ = os.Remove(glob)
 	}
-	// 起動時点の一時ファイルを作成
-	fpForValidate, err := os.CreateTemp(currentDir, "PHP_GO_validation.php")
-	defer func() {
-		err := fpForValidate.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
-	if err != nil {
-		panic(err)
-	}
-	//fmt.Printf("fpForValidate.Name(): %s\r\n", fpForValidate.Name())
 
 	// ユーザーが入力したファイル
-	manualFp, err := os.Open(filePathForSurveillance)
+	manualFp, err := os.OpenFile(filePathForSurveillance, os.O_CREATE|os.O_RDWR, 0777)
+	size, err := manualFp.Write([]byte("<?php\n"))
 	if err != nil {
 		panic(err)
 	}
+	fmt.Printf("size: %v\r\n", size)
 	var previousExcecuteCode []string
 	for {
 		// php実行時の出力行数を保持
@@ -120,62 +116,66 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 			if !ok {
 				return
 			}
-			if event.Has(fsnotify.Write) && event.Name == filePathForSurveillance {
-				hashedValue = hash(filePathForSurveillance)
-				//surveillanceFile, _ := os.Open(event.Name)
-				//readByte, _ := ioutil.ReadAll(surveillanceFile)
-				//h := sha256.New()
-				//h.Write(readByte)
-				//hashedValue = h.Sum(nil)
-				//log.Println("Hashed value: ", hashedValue)
-				if hashedValue == previousHash {
-					continue
-				}
-				// 古いハッシュを更新
-				previousHash = hashedValue
-				if len(previousExcecuteCode) > 0 {
-					nextExecutedCode, _ := wiredrawing.File(filePathForSurveillance)
-					if len(previousExcecuteCode) >= len(nextExecutedCode) {
-						for index := 0; index < len(previousExcecuteCode); index++ {
-							if previousExcecuteCode[index] != nextExecutedCode[index] {
-								php.SetPreviousList(0)
-								break
-							}
-						}
+			if event.Has(fsnotify.Write) && event.Name != filePathForSurveillance {
+				continue
+			}
+			hashedValue = hash(filePathForSurveillance)
+
+			if hashedValue == previousHash {
+				continue
+			}
+			// 古いハッシュを更新
+			previousHash = hashedValue
+			if len(previousExcecuteCode) > 0 {
+				nextExecutedCode, _ := wiredrawing.File(filePathForSurveillance)
+
+				for i := 0; i < len(previousExcecuteCode); i++ {
+					if (len(nextExecutedCode) - 1) < i {
+						php.SetPreviousList(0)
+						break
 					}
-					previousExcecuteCode = nextExecutedCode
-				} else {
-					previousExcecuteCode, _ = wiredrawing.File(filePathForSurveillance)
-				}
-				io.Copy(fpForValidate, manualFp)
-				php.SetOkFile(filePathForSurveillance)
-				php.SetNgFile(filePathForSurveillance)
-				// 致命的なエラー
-				isFatal, err := php.DetectFatalError()
-				if isFatal == true {
-					// 致命的なエラーの場合
-					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-					fmt.Println(inputter.ColorWrapping("31", string(php.ErrorBuffer)))
-					continue
-				} else {
-					if len(php.ErrorBuffer) > 0 {
-						// 非Fatal Error
-						fmt.Println(inputter.ColorWrapping("33", string(php.ErrorBuffer)))
-						continue
+					// スペースは削除して比較
+					p := strings.TrimSpace(previousExcecuteCode[i])
+					n := strings.TrimSpace(nextExecutedCode[i])
+					if p != n {
+						php.SetPreviousList(0)
+						break
 					}
 				}
-				if bytes, err := php.DetectErrorExceptFatalError(); (err != nil) || len(bytes) > 0 {
-					fmt.Println(inputter.ColorWrapping("31", string(bytes)))
+				previousExcecuteCode = nextExecutedCode
+			} else {
+				previousExcecuteCode, _ = wiredrawing.File(filePathForSurveillance)
+			}
+			//io.Copy(fpForValidate, manualFp)
+			php.SetOkFile(filePathForSurveillance)
+			php.SetNgFile(filePathForSurveillance)
+			// 致命的なエラー
+			isFatal, err := php.DetectFatalError()
+			if isFatal == true {
+				// 致命的なエラーの場合
+				// Fatal Errorが検出された場合はエラーメッセージを表示して終了
+				fmt.Println("[Fatal Error]")
+				fmt.Println(inputter.ColorWrapping("31", string(php.ErrorBuffer)))
+				continue
+			} else {
+				if len(php.ErrorBuffer) > 0 {
+					// 非Fatal Error
+					fmt.Println("[None Fatal Error]")
+					fmt.Println(inputter.ColorWrapping("33", string(php.ErrorBuffer)))
 					continue
 				}
-				fmt.Println(" --> ")
-				size, err := php.Execute()
-				if err != nil {
-					panic(err)
-				}
-				if size > 0 {
-					fmt.Println("")
-				}
+			}
+			if bytes, err := php.DetectErrorExceptFatalError(); (err != nil) || len(bytes) > 0 {
+				fmt.Println(inputter.ColorWrapping("31", string(bytes)))
+				continue
+			}
+			fmt.Println(" >>> ")
+			size, err := php.Execute(true)
+			if err != nil {
+				panic(err)
+			}
+			if size > 0 {
+				fmt.Println("")
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -200,6 +200,7 @@ func main() {
 	var phpPath *string = stringp(commandConfig["phppath"])
 	var surveillanceFile *string = stringp(commandConfig["surveillance"])
 	var prompt *string = stringp(commandConfig["prompt"])
+	var saveFileName *string = stringp(commandConfig["saveFileName"])
 	//phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
 	//surveillanceFile := flag.String("surveillance", DefaultSurveillanceFileName, "監視対象のファイル名を入力")
 	//flag.Parse()
@@ -298,12 +299,14 @@ func main() {
 			if code == 1 {
 				os.Exit(code)
 			} else if code == 4 {
-				fmt.Print("[Ignored interrupt].\r\n")
+				fmt.Printf(inputter.ColorWrapping("33", "Please input the word 'exit' to exit the program.\r\n"))
+				//fmt.Print("[Ignored interrupt].\r\n")
 			} else {
 				if runtime.GOOS != "darwin" {
 					fmt.Print("[Ignored interrupt].\r\n")
 				}
 			}
+			fmt.Printf("code: %v\r\n", code)
 		}
 	}(exit)
 	// ----------------------------------------------
@@ -314,14 +317,15 @@ func main() {
 		if err := recover(); err != nil {
 			if err, ok := err.(error); ok {
 				fmt.Println(err)
-				_, err = inputter.StandByInput(*phpPath, *prompt)
+				_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName, exit)
 			} else {
 				fmt.Printf("%T\r\n", err)
 				fmt.Println("errorの型アサーションに失敗")
 			}
 		}
 	}()
-	_, err = inputter.StandByInput(*phpPath, *prompt)
+	fmt.Println(inputter.ColorWrapping("32", "[The applicaiton was just started.]"))
+	_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName, exit)
 	if err != nil {
 		panic(err)
 	}

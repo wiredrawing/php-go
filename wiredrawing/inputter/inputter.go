@@ -86,7 +86,7 @@ func init() {
 }
 
 // StandByInput 標準入力を待ち受ける関数
-func StandByInput(phpPath string, inputPrompt string) (bool, error) {
+func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit chan int) (bool, error) {
 	// phpPathが未指定の場合はハイフンが設定されているため
 	// それ以外の場合は指定したphpパスで実行する
 	var phpExecutePath = "php"
@@ -139,7 +139,7 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
-	var prompt = inputPrompt
+	var prompt = fmt.Sprintf(" %s ", inputPrompt)
 	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	//var latestErrorMessage = ""
 	var inputText string
@@ -166,8 +166,27 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 			continue
 		}
 
+		if inputText == "help" {
+			var helpMessages = make([]string, 0, 32)
+			helpMessages = append(helpMessages, fmt.Sprintf("[help]"))
+			helpMessages = append(helpMessages, fmt.Sprintf("clear:    入力途中の内容を破棄します."))
+			helpMessages = append(helpMessages, fmt.Sprintf("rollback: 入力済みの入力を一行ずつ削除します."))
+			helpMessages = append(helpMessages, fmt.Sprintf("cat:      入力済みの内容を表示します."))
+			helpMessages = append(helpMessages, fmt.Sprintf("exit:     アプリケーションを終了します."))
+			var helpMessage = strings.Join(helpMessages, "\n")
+			fmt.Println(colorWrapping("33", helpMessage))
+			continue
+		}
+
 		if inputText == "rollback" {
-			popStirngToFile(ngFile, -1)
+			lines, err := wiredrawing.File(ngFile)
+			if err != nil {
+				panic(err)
+			}
+			if len(lines) == 1 {
+				continue
+			}
+			_ = popStirngToFile(ngFile, -1)
 			isFatal, _ := php.DetectFatalError()
 			errorBuffer := php.ErrorBuffer
 			if isFatal == true {
@@ -176,12 +195,23 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 				if len(errorBuffer) > 0 {
 					prompt = " ... "
 				} else {
-					prompt = " >>> "
+					prompt = " " + (inputPrompt) + " "
 				}
 			}
+			php.SetOkFile(ngFile)
+			php.SetPreviousList(0)
+			php.Execute(false)
+			//f, _ := os.Open(ngFile)
+			//bytes, _ := io.ReadAll(f)
+			//fmt.Println(colorWrapping("34", string(bytes)))
+			//_ = f.Close()
 			continue
 		}
 
+		if inputText == "save" {
+			php.Save(saveFileName)
+			continue
+		}
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 
@@ -209,9 +239,6 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 			continue
 		}
 
-		if inputText == "ls" {
-
-		}
 		// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
 		// ファイルサイズを空にする
 		if inputText == "clear" {
@@ -223,7 +250,7 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 			_, _ = fmt.Fprintln(ioutil.Discard, writtenSize, err)
 			fmt.Print("\033[0m")
 			php.IsPermissibleError = false
-			prompt = " >>> "
+			prompt = fmt.Sprintf(" %s ", inputPrompt)
 			runtime.GC()
 			debug.FreeOSMemory()
 			continue
@@ -316,7 +343,7 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 				}
 			}
 		}
-		if outputSize, err := php.Execute(); err != nil {
+		if outputSize, err := php.Execute(true); err != nil {
 			fmt.Println(colorWrapping("31", err.Error()))
 		} else {
 			if outputSize > 0 {
@@ -325,7 +352,7 @@ func StandByInput(phpPath string, inputPrompt string) (bool, error) {
 				fmt.Print(colorWrapping("0", ""))
 			}
 		}
-		prompt = " >>> "
+		prompt = fmt.Sprintf(" %s ", inputPrompt)
 		continue
 	}
 	// 標準入力の終了

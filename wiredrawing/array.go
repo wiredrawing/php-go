@@ -123,6 +123,8 @@ type PhpExecuter struct {
 	ngFile             string
 	previousLine       int
 	connection         net.Conn
+	// 許容可能なエラーメッセージかどうか
+	isAllowable bool
 }
 
 // SetPreviousList ----------------------------------------
@@ -137,11 +139,8 @@ func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 	pe.PhpPath = phpPath
 }
 
-func (pe *PhpExecuter) Execute() (int, error) {
+func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 
-	//pe.passTCPServer("Execute() is called.")
-
-	var showBuffer bool = true
 	var colorCode string = "34"
 	// isValidate == true の場合はngFileを実行(事前実行)
 	command := exec.Command(pe.PhpPath, pe.okFile)
@@ -163,6 +162,9 @@ func (pe *PhpExecuter) Execute() (int, error) {
 	// whenError == true の場合バッファ内容を返却してやる
 	//var bufferWhenError string
 	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
+	//t := time.Now()
+	//formatted := t.Format(time.RFC3339)
+	//_, _ = os.Stdout.WriteString(formatted + " ")
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
@@ -184,24 +186,18 @@ func (pe *PhpExecuter) Execute() (int, error) {
 				diff := pe.previousLine - currentLine
 				tempSlice := readData[diff:]
 				// 出力内容の表示フラグがtrueの場合のみ
+				outputSize += len(tempSlice)
 				if showBuffer == true {
-					outputSize += len(tempSlice)
 					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
-					if pe.connection != nil {
-						pe.passTCPServer(string(tempSlice))
-					}
 					if err != nil {
 						log.Fatal(err)
 					}
 				}
 			} else {
 				// 出力内容の表示フラグがtrueの場合のみ
+				outputSize += len(readData)
 				if showBuffer == true {
-					outputSize += len(readData)
 					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
-					if pe.connection != nil {
-						pe.passTCPServer(string(readData))
-					}
 					if err != nil {
 						log.Fatal(err)
 					}
@@ -219,6 +215,7 @@ func (pe *PhpExecuter) Execute() (int, error) {
 	// コンソールのカラーをもとにもどす
 	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
+	pe.ErrorBuffer = []byte{}
 	return outputSize, nil
 }
 
@@ -344,6 +341,25 @@ func (pe *PhpExecuter) WriteToNg(input string) int {
 	return size
 }
 
+func (pe *PhpExecuter) Save(saveFileName string) bool {
+	// バックアップ用ファイルを作成する
+	wd, _ := os.Getwd()
+	if saveFileName == "" {
+		saveFileName = "save.php"
+	} else {
+		saveFileName = wd + "/" + saveFileName
+	}
+	des, _ := os.OpenFile(saveFileName, os.O_CREATE, 0777)
+	src, _ := os.OpenFile(pe.ngFile, os.O_RDONLY, 0777)
+	_, err := io.Copy(des, src)
+	if err != nil {
+		panic(err)
+	}
+	_ = src.Close()
+	_ = des.Close()
+	return true
+}
+
 // PHPのfile関数と同様の処理をエミュレーション
 func File(filePath string) ([]string, error) {
 	var fileRows []string = make([]string, 0, 512)
@@ -378,24 +394,24 @@ func File(filePath string) ([]string, error) {
 	return fileRows, nil
 }
 
-func (pe *PhpExecuter) passTCPServer(s string) {
-
-	if pe.connection == nil {
-		addr := net.TCPAddr{
-			IP:   net.ParseIP("127.0.0.1"),
-			Port: 8888,
-		}
-		connect, err := net.DialTCP("tcp", nil, &addr)
-		if err != nil {
-			panic(err)
-		}
-		pe.connection = connect
-	}
-	_, _ = pe.connection.Write([]byte(s))
-	//for {
-	//	select {
-	//	case s := <-stringChannel:
-	//		_, _ = pe.connection.Write([]byte(s))
-	//	}
-	//}
-}
+//func (pe *PhpExecuter) passTCPServer(s string) {
+//
+//	if pe.connection == nil {
+//		addr := net.TCPAddr{
+//			IP:   net.ParseIP("127.0.0.1"),
+//			Port: 8888,
+//		}
+//		connect, err := net.DialTCP("tcp", nil, &addr)
+//		if err != nil {
+//			panic(err)
+//		}
+//		pe.connection = connect
+//	}
+//	_, _ = pe.connection.Write([]byte(s))
+//	//for {
+//	//	select {
+//	//	case s := <-stringChannel:
+//	//		_, _ = pe.connection.Write([]byte(s))
+//	//	}
+//	//}
+//}
