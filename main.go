@@ -5,10 +5,12 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
+	"github.com/joho/godotenv"
 	"golang.org/x/sys/windows"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"phpgo/cmd"
@@ -64,9 +66,7 @@ func hash(filepath string) string {
 	}(file)
 	h := sha256.New()
 	readBytes, _ := ioutil.ReadAll(file)
-	fmt.Printf("readBytes: %v\r\n", readBytes)
-	size, err := h.Write(readBytes)
-	fmt.Printf("size: %v\r\n", size)
+	_, err = h.Write(readBytes)
 	if err != nil {
 		log.Println(err)
 		return ""
@@ -190,6 +190,11 @@ func stringp(s string) *string {
 	return &s
 }
 func main() {
+	// surveillanceモードの場合に常時開くエディタを指定する
+	godotenv.Load()
+	var editorPath = os.Getenv("EDITOR_PATH")
+	fmt.Println(editorPath)
+
 	commandConfig := cmd.Execute()
 
 	var _ bool
@@ -255,6 +260,11 @@ func main() {
 			}
 		}(watcher)
 
+		// 指定されたエディタパスでファイルを開く
+		err = exec.Command(editorPath, filePathForSurveillance).Start()
+		if (err != nil) && (err.Error() != "exit status 1") {
+			panic(err)
+		}
 		// Start listening for events.
 		go ExecuteSurveillanceFile(watcher, filePathForSurveillance, phpPath)
 		watcher.Add(workingDirectory)

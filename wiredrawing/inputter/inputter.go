@@ -36,6 +36,30 @@ func makeDirectory(dir string) bool {
 	return true
 }
 
+func concatenate(fileName string) []string {
+	catFile, err := os.Open(fileName)
+	if err != nil {
+		panic(err)
+	}
+	tempScanner := bufio.NewScanner(catFile)
+
+	var index = 0
+	var indexStr = ""
+	fmt.Println("")
+	var outputList []string = make([]string, 0, 100)
+	var t string = ""
+	for tempScanner.Scan() {
+		indexStr = fmt.Sprintf("%03d", index)
+		fmt.Print(colorWrapping("34", indexStr) + ": ")
+		t = tempScanner.Text()
+		outputList = append(outputList, t)
+		fmt.Println(colorWrapping("32", t))
+		index++
+	}
+	fmt.Println("")
+	return outputList
+}
+
 // ----------------------------------------------//
 // パッケージの初期化
 // init関数は値を返却できない
@@ -201,10 +225,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 			php.SetOkFile(ngFile)
 			php.SetPreviousList(0)
 			php.Execute(false)
-			//f, _ := os.Open(ngFile)
-			//bytes, _ := io.ReadAll(f)
-			//fmt.Println(colorWrapping("34", string(bytes)))
-			//_ = f.Close()
+			_ = concatenate(ngFile)
 			continue
 		}
 
@@ -258,22 +279,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 
 		// cat と入力すると現在まで入力している内容を出力する
 		if inputText == "cat" {
-			catFile, err := os.Open(ngFile)
-			if err != nil {
-				panic(err)
-			}
-			tempScanner := bufio.NewScanner(catFile)
-
-			var index = 0
-			var indexStr = ""
-			fmt.Println("")
-			for tempScanner.Scan() {
-				indexStr = fmt.Sprintf("%03d", index)
-				fmt.Print(colorWrapping("34", indexStr) + ": ")
-				fmt.Println(colorWrapping("32", tempScanner.Text()))
-				index++
-			}
-			fmt.Println("")
+			concatenate(ngFile)
 			continue
 		}
 
