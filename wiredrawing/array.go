@@ -125,6 +125,19 @@ type PhpExecuter struct {
 	connection         net.Conn
 	// 許容可能なエラーメッセージかどうか
 	isAllowable bool
+	// アプリケーション起動時からの全エラーメッセージを保持する
+	wholeErrors []string
+}
+
+// WholeErrors ----------------------------------------
+func (pe *PhpExecuter) WholeErrors() []string {
+	return pe.wholeErrors
+}
+
+// ResetWholeErrors ----------------------------------------
+// 溜まったエラーメッセージをリセットする
+func (pe *PhpExecuter) ResetWholeErrors() {
+	pe.wholeErrors = []string{}
 }
 
 // SetPreviousList ----------------------------------------
@@ -257,6 +270,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 		//fmt.Printf("Syntax Error: <<<%v>>>\n", string(loaded))
 		pe.IsPermissibleError = true
 		pe.ErrorBuffer = loaded
+		pe.wholeErrors = append(pe.wholeErrors, string(loaded))
 		return true, nil
 	}
 
@@ -284,6 +298,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 			// Fatal Error in PHP ではない
 			// また標準エラー出力はオブジェクトから取得する
 			pe.ErrorBuffer = loadedByte
+			pe.wholeErrors = append(pe.wholeErrors, string(loadedByte))
 			return false, nil
 			//return loadedByte, false, nil
 		}
@@ -297,6 +312,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	}
 	// シンタックスエラーのみ許容するが Fatal Error in PHP である
 	pe.ErrorBuffer = loadedByte
+	pe.wholeErrors = append(pe.wholeErrors, string(loadedByte))
 	return true, nil
 }
 
@@ -393,25 +409,3 @@ func File(filePath string) ([]string, error) {
 	fileRows = fileRows[:rowsNumber]
 	return fileRows, nil
 }
-
-//func (pe *PhpExecuter) passTCPServer(s string) {
-//
-//	if pe.connection == nil {
-//		addr := net.TCPAddr{
-//			IP:   net.ParseIP("127.0.0.1"),
-//			Port: 8888,
-//		}
-//		connect, err := net.DialTCP("tcp", nil, &addr)
-//		if err != nil {
-//			panic(err)
-//		}
-//		pe.connection = connect
-//	}
-//	_, _ = pe.connection.Write([]byte(s))
-//	//for {
-//	//	select {
-//	//	case s := <-stringChannel:
-//	//		_, _ = pe.connection.Write([]byte(s))
-//	//	}
-//	//}
-//}

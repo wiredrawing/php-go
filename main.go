@@ -189,16 +189,24 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 func stringp(s string) *string {
 	return &s
 }
+
 func main() {
-	// surveillanceモードの場合に常時開くエディタを指定する
-	godotenv.Load()
-	var editorPath = os.Getenv("EDITOR_PATH")
-	fmt.Println(editorPath)
-
-	commandConfig := cmd.Execute()
-
 	var _ bool
 	var err error
+	fmt.Println(inputter.ColorWrapping("30", "Hello, World!"))
+	fmt.Println(inputter.ColorWrapping("31", "Hello, World!"))
+	fmt.Println(inputter.ColorWrapping("32", "Hello, World!"))
+	fmt.Println(inputter.ColorWrapping("33", "Hello, World!"))
+	fmt.Println(inputter.ColorWrapping("34", "Hello, World!"))
+	fmt.Println(inputter.ColorWrapping("35", "Hello, World!"))
+	// surveillanceモードの場合に常時開くエディタを指定する
+	err = godotenv.Load()
+	if err != nil {
+		fmt.Println(inputter.ColorWrapping(inputter.Red, "環境変数がロードできません。ターミナルのみ稼働します。"))
+	}
+	var editorPath = os.Getenv("EDITOR_PATH")
+
+	commandConfig := cmd.Execute()
 
 	//go spinner()
 	// コマンドライン引数を取得
@@ -261,9 +269,12 @@ func main() {
 		}(watcher)
 
 		// 指定されたエディタパスでファイルを開く
-		err = exec.Command(editorPath, filePathForSurveillance).Start()
-		if (err != nil) && (err.Error() != "exit status 1") {
-			panic(err)
+		// もしエディタパスが指定されていなければスルーする
+		if len(editorPath) > 0 {
+			err = exec.Command(editorPath, filePathForSurveillance).Start()
+			if (err != nil) && (err.Error() != "exit status 1") {
+				panic(err)
+			}
 		}
 		// Start listening for events.
 		go ExecuteSurveillanceFile(watcher, filePathForSurveillance, phpPath)
@@ -309,7 +320,7 @@ func main() {
 			if code == 1 {
 				os.Exit(code)
 			} else if code == 4 {
-				fmt.Printf(inputter.ColorWrapping("33", "Please input the word 'exit' to exit the program.\r\n"))
+				fmt.Printf(inputter.ColorWrapping(inputter.Yellow, "Please input the word 'exit' to exit the program.\r\n"))
 				//fmt.Print("[Ignored interrupt].\r\n")
 			} else {
 				if runtime.GOOS != "darwin" {
@@ -334,7 +345,7 @@ func main() {
 			}
 		}
 	}()
-	fmt.Println(inputter.ColorWrapping("32", "[The applicaiton was just started.]"))
+	fmt.Println(inputter.ColorWrapping(inputter.Green, "[The applicaiton was just started.]"))
 	_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName, exit)
 	if err != nil {
 		panic(err)

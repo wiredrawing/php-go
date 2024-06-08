@@ -15,9 +15,6 @@ import (
 	"strings"
 )
 
-// 改行文字を定義
-const newLine string = "\n"
-
 // 入力内容を保持する変数
 //var inputText = ""
 
@@ -50,10 +47,10 @@ func concatenate(fileName string) []string {
 	var t string = ""
 	for tempScanner.Scan() {
 		indexStr = fmt.Sprintf("%03d", index)
-		fmt.Print(colorWrapping("34", indexStr) + ": ")
+		fmt.Print(ColorWrapping("34", indexStr) + ": ")
 		t = tempScanner.Text()
 		outputList = append(outputList, t)
-		fmt.Println(colorWrapping("32", t))
+		fmt.Println(ColorWrapping("32", t))
 		index++
 	}
 	fmt.Println("")
@@ -179,7 +176,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		}
 		fmt.Print(prompt)
 		// Terminalのカラーリングを白に戻す
-		fmt.Print(colorWrapping("0", ""))
+		fmt.Print(ColorWrapping("0", ""))
 		// 両端のスペースを削除
 		rawInputText := wiredrawing.StdInput()
 		//previousInputText = inputText
@@ -197,11 +194,24 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 			helpMessages = append(helpMessages, fmt.Sprintf("rollback: 入力済みの入力を一行ずつ削除します."))
 			helpMessages = append(helpMessages, fmt.Sprintf("cat:      入力済みの内容を表示します."))
 			helpMessages = append(helpMessages, fmt.Sprintf("exit:     アプリケーションを終了します."))
+			helpMessages = append(helpMessages, fmt.Sprintf("errors:   過去のエラーを全て表示します."))
 			var helpMessage = strings.Join(helpMessages, "\n")
-			fmt.Println(colorWrapping("33", helpMessage))
+			fmt.Println(ColorWrapping("33", helpMessage))
 			continue
 		}
 
+		if inputText == "errors" {
+			var wholeErrors = php.WholeErrors()
+			for key, value := range wholeErrors {
+				fmt.Print(ColorWrapping(Green, fmt.Sprintf("[%03d] => ", key+1)))
+				fmt.Print(ColorWrapping(Red, value))
+			}
+			continue
+		}
+		if inputText == "reset errors" {
+			php.ResetWholeErrors()
+			continue
+		}
 		if inputText == "rollback" {
 			lines, err := wiredrawing.File(ngFile)
 			if err != nil {
@@ -236,14 +246,14 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 
-			fmt.Println(colorWrapping("31", "PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。"))
+			fmt.Println(ColorWrapping("31", "[PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。]"))
 			fmt.Print(prompt)
 			// 両端のスペースを削除
 			var inputText = wiredrawing.StdInput()
 			inputText = strings.TrimSpace(inputText)
 			// 入力内容が空文字の場合コマンドラインを終了する
 			if len(inputText) == 0 {
-				fmt.Println(colorWrapping("31", "キャンセルしました。"))
+				fmt.Println(ColorWrapping("31", "キャンセルしました。"))
 				continue
 			}
 
@@ -251,7 +261,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 				// 終了メッセージを表示
 				// string型を[]byteに変換して書き込み
 				var messageToEnd = []byte("Thank you for using me! Good by.")
-				_, err := os.Stdout.Write([]byte(colorWrapping("34", string(messageToEnd))))
+				_, err := os.Stdout.Write([]byte(ColorWrapping("34", string(messageToEnd))))
 				if err != nil {
 					return false, err
 				}
@@ -303,7 +313,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 					prompt = " ... "
 				} else {
 					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-					fmt.Println(colorWrapping("31", string(errorBuffer)))
+					fmt.Println(ColorWrapping("31", string(errorBuffer)))
 					// 事前検証用のfileの中身を本実行用fileの中身と同じにする
 					if source, err := os.Open(okFile); err != nil {
 						panic(err)
@@ -320,7 +330,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 			}
 		} else if (isFatal == false) && len(php.ErrorBuffer) > 0 {
 			// Fatal Error ではないがErrorBufferが空ではない場合
-			fmt.Println(colorWrapping("33", string(php.ErrorBuffer)))
+			fmt.Println(ColorWrapping("33", string(php.ErrorBuffer)))
 			// 事前検証用のfileの中身を本実行用fileの中身と同じにする
 			if source, err := os.Open(okFile); err != nil {
 				panic(err)
@@ -350,12 +360,12 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 			}
 		}
 		if outputSize, err := php.Execute(true); err != nil {
-			fmt.Println(colorWrapping("31", err.Error()))
+			fmt.Println(ColorWrapping("31", err.Error()))
 		} else {
 			if outputSize > 0 {
-				fmt.Print(colorWrapping("0", "\n"))
+				fmt.Print(ColorWrapping("0", "\n"))
 			} else {
-				fmt.Print(colorWrapping("0", ""))
+				fmt.Print(ColorWrapping("0", ""))
 			}
 		}
 		prompt = fmt.Sprintf(" %s ", inputPrompt)
@@ -374,9 +384,15 @@ func ColorWrapping(colorCode string, text string) string {
 	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
 
-func colorWrapping(colorCode string, text string) string {
-	return "\033[" + colorCode + "m" + text + "\033[0m"
-}
+const (
+	White   = "30"
+	Red     = "31"
+	Green   = "32"
+	Yellow  = "33"
+	Blue    = "34"
+	Magenta = "35"
+	Cyan    = "36"
+)
 
 // popStirngToFile 指定したファイルの指定した行を削除する
 // 指定する行数は 1から開始させる
@@ -515,7 +531,7 @@ func deletePreviousCode(tokens []string, ngFile string, okFile string) int {
 		}
 		command.Start()
 		// 第三引数にfalseを与えて,実行結果の出力を破棄する
-		wiredrawing.LoadBuffer(buffer, &previousLine, false, false, "34")
+		wiredrawing.LoadBuffer(buffer, &previousLine, false, false, Blue)
 		fmt.Println("")
 		return -1
 	}
