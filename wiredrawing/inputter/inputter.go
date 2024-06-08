@@ -384,16 +384,6 @@ func ColorWrapping(colorCode string, text string) string {
 	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
 
-const (
-	White   = "30"
-	Red     = "31"
-	Green   = "32"
-	Yellow  = "33"
-	Blue    = "34"
-	Magenta = "35"
-	Cyan    = "36"
-)
-
 // popStirngToFile 指定したファイルの指定した行を削除する
 // 指定する行数は 1から開始させる
 func popStirngToFile(filePath string, row int) error {

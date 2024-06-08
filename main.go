@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"phpgo/cmd"
+	"phpgo/config"
 	"phpgo/wiredrawing"
 	"phpgo/wiredrawing/inputter"
 	"phpgo/wiredrawing/parallel"
@@ -202,7 +203,7 @@ func main() {
 	// surveillanceモードの場合に常時開くエディタを指定する
 	err = godotenv.Load()
 	if err != nil {
-		fmt.Println(inputter.ColorWrapping(inputter.Red, "環境変数がロードできません。ターミナルのみ稼働します。"))
+		fmt.Println(inputter.ColorWrapping(config.Red, "環境変数がロードできません。ターミナルのみ稼働します。"))
 	}
 	var editorPath = os.Getenv("EDITOR_PATH")
 
@@ -320,7 +321,7 @@ func main() {
 			if code == 1 {
 				os.Exit(code)
 			} else if code == 4 {
-				fmt.Printf(inputter.ColorWrapping(inputter.Yellow, "Please input the word 'exit' to exit the program.\r\n"))
+				fmt.Printf(inputter.ColorWrapping(config.Yellow, "Please input the word 'exit' to exit the program.\r\n"))
 				//fmt.Print("[Ignored interrupt].\r\n")
 			} else {
 				if runtime.GOOS != "darwin" {
@@ -345,7 +346,7 @@ func main() {
 			}
 		}
 	}()
-	fmt.Println(inputter.ColorWrapping(inputter.Green, "[The applicaiton was just started.]"))
+	fmt.Println(inputter.ColorWrapping(config.Green, "[The applicaiton was just started.]"))
 	_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName, exit)
 	if err != nil {
 		panic(err)
