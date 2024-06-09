@@ -12,7 +12,13 @@ func FileOpen(filePath string, text string) (int, error) {
 	var file *os.File = nil
 	var err error = nil
 	file, err = os.OpenFile(filePath, os.O_APPEND|os.O_WRONLY, 0777)
-
+	// 本関数は実行の度にファイルを開き,都度閉じる
+	defer (func() {
+		err := file.Close()
+		if err != nil {
+			panic(err)
+		}
+	})()
 	if err != nil {
 		return 0, err
 	}
@@ -24,12 +30,5 @@ func FileOpen(filePath string, text string) (int, error) {
 		return bytesWritten, err
 	}
 
-	// 本関数は実行の度にファイルを開き,都度閉じる
-	defer (func() {
-		err := file.Close()
-		if err != nil {
-			panic(err)
-		}
-	})()
 	return bytesWritten, err
 }

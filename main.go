@@ -91,20 +91,21 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 	}
 	// 一時ファイルの作成
 	currentDir, _ := os.Getwd()
-
-	// 過去に起動した一時ファイルを削除する
-
-	globs, err := filepath.Glob(currentDir + "./PHP_GO_validation*")
-	if err != nil {
-		panic(err)
-	}
-	for _, glob := range globs {
-		_ = os.Remove(glob)
-	}
+	fmt.Printf("currentDir: %v\r\n", currentDir)
+	//// 過去に起動した一時ファイルを削除する
+	//
+	//globs, err := filepath.Glob(currentDir + "./PHP_GO_validation*")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//for _, glob := range globs {
+	//	_ = os.Remove(glob)
+	//}
 
 	// ユーザーが入力したファイル
 	manualFp, err := os.OpenFile(filePathForSurveillance, os.O_CREATE|os.O_RDWR, 0777)
 	size, err := manualFp.Write([]byte("<?php\n"))
+	_ = manualFp.Close()
 	if err != nil {
 		panic(err)
 	}
@@ -147,7 +148,6 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 			} else {
 				previousExcecuteCode, _ = wiredrawing.File(filePathForSurveillance)
 			}
-			//io.Copy(fpForValidate, manualFp)
 			php.SetOkFile(filePathForSurveillance)
 			php.SetNgFile(filePathForSurveillance)
 			// 致命的なエラー
@@ -194,16 +194,15 @@ func stringp(s string) *string {
 func main() {
 	var _ bool
 	var err error
-	fmt.Println(inputter.ColorWrapping("30", "Hello, World!"))
-	fmt.Println(inputter.ColorWrapping("31", "Hello, World!"))
-	fmt.Println(inputter.ColorWrapping("32", "Hello, World!"))
-	fmt.Println(inputter.ColorWrapping("33", "Hello, World!"))
-	fmt.Println(inputter.ColorWrapping("34", "Hello, World!"))
-	fmt.Println(inputter.ColorWrapping("35", "Hello, World!"))
 	// surveillanceモードの場合に常時開くエディタを指定する
+	// デフォルトは .env ファイルを探索する
 	err = godotenv.Load()
 	if err != nil {
-		fmt.Println(inputter.ColorWrapping(config.Red, "環境変数がロードできません。ターミナルのみ稼働します。"))
+		fmt.Println(inputter.ColorWrapping(config.Red, "環境変数がロードできません。ターミナルのみ起動します。"))
+	}
+	err = godotenv.Load(".phpgo")
+	if err != nil {
+		fmt.Println(inputter.ColorWrapping(config.Red, "環境変数がロードできません。ターミナルのみ起動します。"))
 	}
 	var editorPath = os.Getenv("EDITOR_PATH")
 
@@ -215,9 +214,6 @@ func main() {
 	var surveillanceFile *string = stringp(commandConfig["surveillance"])
 	var prompt *string = stringp(commandConfig["prompt"])
 	var saveFileName *string = stringp(commandConfig["saveFileName"])
-	//phpPath := flag.String("phppath", "-", "PHPの実行ファイルのパスを入力")
-	//surveillanceFile := flag.String("surveillance", DefaultSurveillanceFileName, "監視対象のファイル名を入力")
-	//flag.Parse()
 
 	// phpの実行パスを設定
 	if *phpPath == "-" {
@@ -225,37 +221,23 @@ func main() {
 		*phpPath = "php"
 	}
 
-	//
-	// 監視対象のファイル名
-	var filePathForSurveillance = ""
-
 	// 割り込み監視用
-	var signal_chan = make(chan os.Signal)
+	var signalChan = make(chan os.Signal)
 
-	// []string型でコマンドライン引数を受け取る
-	var targetFileName = ""
-	var workingDirectory = ""
 	if *surveillanceFile != DefaultSurveillanceFileName && *surveillanceFile != "" {
-		targetFileName = *surveillanceFile
-		workingDirectory, err = os.Getwd()
-		fmt.Println(workingDirectory)
+		// 事前に過去に作成された一時ファイルを削除する
+		tdir, err := os.MkdirTemp("", "phpgo")
+		fmt.Printf("tdir: %v\r\n", tdir)
 		if err != nil {
-			// 作業ディレクトリが取得できない場合
 			panic(err)
 		}
-		filePathForSurveillance = workingDirectory + "\\" + targetFileName
-		_, err = os.Stat(filePathForSurveillance)
-		if err == nil {
-			// ファイルが既に存在する場合は内容をtruncateする
-			_ = os.Truncate(filePathForSurveillance, 0)
-		} else {
-			// ファイルが存在しない場合は新規作成する
-			_, err := os.Create(filePathForSurveillance)
-			if err != nil {
-				panic(err)
-			}
+		targetPath := filepath.Join(tdir, *surveillanceFile+".php")
+		tempF, err := os.Create(targetPath)
+		if err != nil {
+			panic(err)
 		}
-
+		var filePathForSurveillance string = tempF.Name()
+		_ = tempF.Close()
 		// Create new watcher.
 		watcher, err := fsnotify.NewWatcher()
 		if err != nil {
@@ -265,7 +247,7 @@ func main() {
 		defer func(watcher *fsnotify.Watcher) {
 			err := watcher.Close()
 			if err != nil {
-				panic(err)
+				log.Fatal(err)
 			}
 		}(watcher)
 
@@ -279,12 +261,14 @@ func main() {
 		}
 		// Start listening for events.
 		go ExecuteSurveillanceFile(watcher, filePathForSurveillance, phpPath)
-		watcher.Add(workingDirectory)
+		if err := watcher.Add(tdir); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// コンソールの監視
 	signal.Notify(
-		signal_chan,
+		signalChan,
 		os.Interrupt,
 		os.Kill,
 		windows.SIGKILL,
@@ -311,7 +295,7 @@ func main() {
 
 	var exit = make(chan int)
 	// 割り込み対処を実行するGoルーチン
-	go parallel.InterruptProcess(exit, signal_chan)
+	go parallel.InterruptProcess(exit, signalChan)
 
 	go func(exit chan int) {
 		// var echo = fmt.Print

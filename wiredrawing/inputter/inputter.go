@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"phpgo/config"
 	"phpgo/wiredrawing"
 	"runtime"
 	"runtime/debug"
@@ -203,8 +204,8 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		if inputText == "errors" {
 			var wholeErrors = php.WholeErrors()
 			for key, value := range wholeErrors {
-				fmt.Print(ColorWrapping(Green, fmt.Sprintf("[%03d] => ", key+1)))
-				fmt.Print(ColorWrapping(Red, value))
+				fmt.Print(ColorWrapping(config.Green, fmt.Sprintf("[%03d] => ", key+1)))
+				fmt.Print(ColorWrapping(config.Red, value))
 			}
 			continue
 		}
@@ -521,7 +522,7 @@ func deletePreviousCode(tokens []string, ngFile string, okFile string) int {
 		}
 		command.Start()
 		// 第三引数にfalseを与えて,実行結果の出力を破棄する
-		wiredrawing.LoadBuffer(buffer, &previousLine, false, false, Blue)
+		wiredrawing.LoadBuffer(buffer, &previousLine, false, false, config.Blue)
 		fmt.Println("")
 		return -1
 	}

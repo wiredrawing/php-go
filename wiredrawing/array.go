@@ -56,58 +56,58 @@ func StdInput() string {
 
 	// 入力モードの選択用入力
 	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
-	var ressult bool = scanner.Scan()
-	if ressult == true {
-		var which string = scanner.Text()
-		if which == ">>>" {
-			fmt.Print("\033[33m")
-			var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
-			var readString []string
-			var s = 0
-			for {
-				if s > 0 {
-					fmt.Printf("%s%s", " ... ", " ... ")
-				} else {
-					fmt.Printf("%s%s", " ... ", " >>> ")
-				}
-				scanner.Scan()
-				value := scanner.Text()
+	var result bool = scanner.Scan()
+	if result != true {
+		return ""
+	}
+	var which string = scanner.Text()
+	if which != ">>>" {
+		return which
+	}
+	fmt.Print("\033[33m")
+	{
+		var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
+		var readString []string
+		var s = 0
+		for {
+			if s > 0 {
+				fmt.Printf("%s%s", " ... ", " ... ")
+			} else {
+				fmt.Printf("%s%s", " ... ", " >>> ")
+			}
+			scanner.Scan()
+			value := scanner.Text()
 
-				if value == "rollback" {
-					if len(readString) > 0 {
-						var lastString string = readString[len(readString)-1]
-						readString = readString[0 : len(readString)-1]
-						fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
-						continue
-					}
-				} else if value == "cat" {
-					// 現在までの入力を確認する
-					var indexStr string = ""
-					for index, value := range readString {
-						indexStr = fmt.Sprintf("%03d", index)
-						fmt.Print(colorWrapping("34", indexStr) + ": ")
-						fmt.Println(colorWrapping("32", value))
-					}
+			if value == "rollback" {
+				if len(readString) > 0 {
+					var lastString string = readString[len(readString)-1]
+					readString = readString[0 : len(readString)-1]
+					fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
 					continue
 				}
-				if value == "" {
-					break
+			} else if value == "cat" {
+				// 現在までの入力を確認する
+				var indexStr string = ""
+				for index, value := range readString {
+					indexStr = fmt.Sprintf("%03d", index)
+					fmt.Print(colorWrapping("34", indexStr) + ": ")
+					fmt.Println(colorWrapping("32", value))
 				}
-				readString = append(readString, value)
-				s++
-				//fmt.Printf("k: %v, v: %v\n", key, key)
+				continue
 			}
-			fmt.Print("\033[0m")
-			if len(readString) > 0 {
-				return strings.Join(readString, "\n")
+			if value == "" {
+				break
 			}
-			return ""
-		} else {
-			return which
+			readString = append(readString, value)
+			s++
+			//fmt.Printf("k: %v, v: %v\n", key, key)
 		}
+		fmt.Print("\033[0m")
+		if len(readString) > 0 {
+			return strings.Join(readString, "\n")
+		}
+		return ""
 	}
-	//fmt.Println("Failed scanner.Scan().")
-	return ""
 }
 
 func colorWrapping(colorCode string, text string) string {
@@ -367,12 +367,14 @@ func (pe *PhpExecuter) Save(saveFileName string) bool {
 	}
 	des, _ := os.OpenFile(saveFileName, os.O_CREATE, 0777)
 	src, _ := os.OpenFile(pe.ngFile, os.O_RDONLY, 0777)
+	defer (func() {
+		_ = src.Close()
+		_ = des.Close()
+	})()
 	_, err := io.Copy(des, src)
 	if err != nil {
 		panic(err)
 	}
-	_ = src.Close()
-	_ = des.Close()
 	return true
 }
 
