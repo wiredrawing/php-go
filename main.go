@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"phpgo/cmd"
 	"phpgo/config"
+	"phpgo/errorhandler"
 	"phpgo/wiredrawing"
 	"phpgo/wiredrawing/inputter"
 	"phpgo/wiredrawing/parallel"
@@ -106,9 +107,8 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 	manualFp, err := os.OpenFile(filePathForSurveillance, os.O_CREATE|os.O_RDWR, 0777)
 	size, err := manualFp.Write([]byte("<?php\n"))
 	_ = manualFp.Close()
-	if err != nil {
-		panic(err)
-	}
+	// エラーの場合は以下の関数内で終了するため、エラー処理は不要
+	errorhandler.ErrorHandler(err)
 	fmt.Printf("size: %v\r\n", size)
 	var previousExcecuteCode []string
 	for {
@@ -206,14 +206,17 @@ func main() {
 	}
 	var editorPath = os.Getenv("EDITOR_PATH")
 
-	commandConfig := cmd.Execute()
+	commandLineOption := cmd.Execute()
 
-	//go spinner()
+	if commandLineOption.Help || commandLineOption.Version || commandLineOption.Toggle {
+		os.Exit(0)
+	}
 	// コマンドライン引数を取得
-	var phpPath *string = stringp(commandConfig["phppath"])
-	var surveillanceFile *string = stringp(commandConfig["surveillance"])
-	var prompt *string = stringp(commandConfig["prompt"])
-	var saveFileName *string = stringp(commandConfig["saveFileName"])
+	var phpPath *string = stringp(commandLineOption.Phppath)
+	var surveillanceFile *string = stringp(commandLineOption.Surveillance)
+	var prompt *string = stringp(commandLineOption.Prompt)
+	var saveFileName *string = stringp(commandLineOption.SaveFileName)
+	var editorPathFromCommandLineOption *string = stringp(commandLineOption.EditorPath)
 
 	// phpの実行パスを設定
 	if *phpPath == "-" {
@@ -255,6 +258,11 @@ func main() {
 		// もしエディタパスが指定されていなければスルーする
 		if len(editorPath) > 0 {
 			err = exec.Command(editorPath, filePathForSurveillance).Start()
+			if (err != nil) && (err.Error() != "exit status 1") {
+				panic(err)
+			}
+		} else if len(*editorPathFromCommandLineOption) > 0 {
+			err = exec.Command(*editorPathFromCommandLineOption, filePathForSurveillance).Start()
 			if (err != nil) && (err.Error() != "exit status 1") {
 				panic(err)
 			}

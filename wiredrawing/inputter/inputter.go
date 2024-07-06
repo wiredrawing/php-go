@@ -125,18 +125,32 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 
 	var ngFile = ".validation.dat"
 	var okFile = ".success.dat"
-	var filePathForError = ".erorr_message.dat"
+	//var filePathForError = ".erorr_message.dat"
+	//
+	//var homeDir string
+	dname, _ := os.MkdirTemp("", "phpgo_")
+	//fmt.Printf("tempDir: %v\r\n", dname)
+	ngTempF, err := os.CreateTemp(dname, "ngFile.dat")
+	if err != nil {
+		panic(err)
+	}
+	okTempF, err := os.CreateTemp(dname, "okFile.dat")
+	if err != nil {
+		panic(err)
+	}
+	//homeDir, _ = os.UserHomeDir()
+	//// 本アプリケーション専用の設定ディレクトリ
+	//var dotDir = homeDir + "\\.php-go"
+	//// ディレクトリが存在しない場合は作成する
+	//makeDirectory(dotDir)
 
-	var homeDir string
-	homeDir, _ = os.UserHomeDir()
-	// 本アプリケーション専用の設定ディレクトリ
-	var dotDir = homeDir + "\\.php-go"
-	// ディレクトリが存在しない場合は作成する
-	makeDirectory(dotDir)
-
-	ngFile = dotDir + "\\" + ngFile
-	okFile = dotDir + "\\" + okFile
-	filePathForError = dotDir + "\\" + filePathForError
+	//ngFile = dotDir + "\\" + ngFile
+	//okFile = dotDir + "\\" + okFile
+	ngFile = ngTempF.Name()
+	ngTempF.Close()
+	okFile = okTempF.Name()
+	okTempF.Close()
+	//filePathForError = dotDir + "\\" + filePathForError
 
 	// OSの一時ファイル作成に任せる
 	okFileTemp, err := os.CreateTemp("", ".success.dat.")
