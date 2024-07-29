@@ -142,8 +142,10 @@ func (pe *PhpExecuter) ResetWholeErrors() {
 
 // SetPreviousList ----------------------------------------
 // 前回のセーブポイントを変更する
-func (pe *PhpExecuter) SetPreviousList(number int) {
+func (pe *PhpExecuter) SetPreviousList(number int) int {
+	var currenetLine int = pe.previousLine
 	pe.previousLine = number
+	return currenetLine
 }
 func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 	if phpPath == "" {

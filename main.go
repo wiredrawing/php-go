@@ -256,6 +256,7 @@ func main() {
 
 		// 指定されたエディタパスでファイルを開く
 		// もしエディタパスが指定されていなければスルーする
+		fmt.Printf("editorPathfromCommandLineOption: %v\r\n", *editorPathFromCommandLineOption)
 		if len(editorPath) > 0 {
 			err = exec.Command(editorPath, filePathForSurveillance).Start()
 			if (err != nil) && (err.Error() != "exit status 1") {

@@ -116,12 +116,16 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		phpExecutePath = phpPath
 	}
 	// ターミナルを終了させるためのキーワード群
-	var wordsToExit = make([]string, 0, 32)
+	//var wordsToExit = make([]string, 0, 32)
+	var wordsToExit []string = []string{
+		"y",
+		"Y",
+		"yes",
+	}
 
-	// ターミナル終了キーワードを設定
-	wordsToExit = append(wordsToExit, "y")
-	wordsToExit = append(wordsToExit, "Y")
-	wordsToExit = append(wordsToExit, "yes")
+	//wordsToExit = append(wordsToExit, "y")
+	//wordsToExit = append(wordsToExit, "Y")
+	//wordsToExit = append(wordsToExit, "yes")
 
 	var ngFile = ".validation.dat"
 	var okFile = ".success.dat"
@@ -248,9 +252,10 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 				}
 			}
 			php.SetOkFile(ngFile)
-			php.SetPreviousList(0)
-			php.Execute(false)
+			cl := php.SetPreviousList(0)
+			_, _ = php.Execute(false)
 			_ = concatenate(ngFile)
+			php.SetPreviousList(cl)
 			continue
 		}
 
