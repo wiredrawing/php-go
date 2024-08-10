@@ -3,7 +3,6 @@ package inputter
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -123,15 +122,9 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		"yes",
 	}
 
-	//wordsToExit = append(wordsToExit, "y")
-	//wordsToExit = append(wordsToExit, "Y")
-	//wordsToExit = append(wordsToExit, "yes")
-
 	var ngFile = ".validation.dat"
 	var okFile = ".success.dat"
-	//var filePathForError = ".erorr_message.dat"
-	//
-	//var homeDir string
+
 	dname, _ := os.MkdirTemp("", "phpgo_")
 	//fmt.Printf("tempDir: %v\r\n", dname)
 	ngTempF, err := os.CreateTemp(dname, "ngFile.dat")
@@ -142,14 +135,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	if err != nil {
 		panic(err)
 	}
-	//homeDir, _ = os.UserHomeDir()
-	//// 本アプリケーション専用の設定ディレクトリ
-	//var dotDir = homeDir + "\\.php-go"
-	//// ディレクトリが存在しない場合は作成する
-	//makeDirectory(dotDir)
 
-	//ngFile = dotDir + "\\" + ngFile
-	//okFile = dotDir + "\\" + okFile
 	ngFile = ngTempF.Name()
 	ngTempF.Close()
 	okFile = okTempF.Name()
@@ -180,8 +166,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	// 標準入力の開始
 	// ----------------------------------------------
 	var prompt = fmt.Sprintf(" %s ", inputPrompt)
-	//var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
-	//var latestErrorMessage = ""
 	var inputText string
 	//var previousInputText = ""
 
@@ -189,6 +173,8 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	var php = wiredrawing.PhpExecuter{
 		PhpPath: phpExecutePath,
 	}
+	php.SetOkFile(okFile)
+	php.SetNgFile(ngFile)
 	for {
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
@@ -251,7 +237,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 					prompt = " " + (inputPrompt) + " "
 				}
 			}
-			php.SetOkFile(ngFile)
+			//php.SetOkFile(ngFile)
 			cl := php.SetPreviousList(0)
 			_, _ = php.Execute(false)
 			_ = concatenate(ngFile)
@@ -294,11 +280,9 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		// ファイルサイズを空にする
 		if inputText == "clear" {
 			// バリデーション用のファイルを空にする
-			ng, err := os.Create(ngFile)
-			ok, err := os.Open(okFile)
-			writtenSize, err := io.Copy(ng, ok)
-			// 出力を削除
-			_, _ = fmt.Fprintln(ioutil.Discard, writtenSize, err)
+			php.Clear()
+			// ただPHP開始タグのみ先頭に追記しておく
+			php.WriteToNg("<?php " + "\n")
 			fmt.Print("\033[0m")
 			php.IsPermissibleError = false
 			prompt = fmt.Sprintf(" %s ", inputPrompt)
@@ -313,8 +297,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 			continue
 		}
 
-		php.SetOkFile(okFile)
-		php.SetNgFile(ngFile)
 		php.WriteToNg(rawInputText + "\n")
 		// ----------------------------------------------------------------
 		// Fatal Error以外を検出する
@@ -335,16 +317,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
 					fmt.Println(ColorWrapping("31", string(errorBuffer)))
 					// 事前検証用のfileの中身を本実行用fileの中身と同じにする
-					if source, err := os.Open(okFile); err != nil {
-						panic(err)
-					} else {
-						if destination, err := os.Create(ngFile); err != nil {
-							panic(err)
-						} else {
-							size, err := io.Copy(destination, source)
-							_, _ = fmt.Fprintln(ioutil.Discard, size, err)
-						}
-					}
+					php.Rollback()
 				}
 				continue
 			}
@@ -352,33 +325,12 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 			// Fatal Error ではないがErrorBufferが空ではない場合
 			fmt.Println(ColorWrapping("33", string(php.ErrorBuffer)))
 			// 事前検証用のfileの中身を本実行用fileの中身と同じにする
-			if source, err := os.Open(okFile); err != nil {
-				panic(err)
-			} else {
-				if destination, err := os.Create(ngFile); err != nil {
-					panic(err)
-				} else {
-					size, err := io.Copy(destination, source)
-					_, _ = fmt.Fprintln(ioutil.Discard, size, err)
-				}
-			}
+			php.Rollback()
 			continue
 		}
 
-		// Fatalエラーそれ以外のエラーともに検出されなかった場合
-		// ngFileの中身をokFileにコピー
-		if ok, err := os.Create(okFile); err != nil {
-			panic(err)
-		} else {
-			if ng, err := os.Open(ngFile); err != nil {
-				panic(err)
-			} else {
-				_, err = io.Copy(ok, ng)
-				if err != nil {
-					panic(err)
-				}
-			}
-		}
+		_ = php.CopyFromNgToOk()
+
 		if outputSize, err := php.Execute(true); err != nil {
 			fmt.Println(ColorWrapping("31", err.Error()))
 		} else {

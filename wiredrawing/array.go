@@ -120,7 +120,9 @@ type PhpExecuter struct {
 	ErrorBuffer        []byte
 	SuccessBuffer      []byte
 	okFile             string
+	okFileFp           *os.File
 	ngFile             string
+	ngFileFp           *os.File
 	previousLine       int
 	connection         net.Conn
 	// 許容可能なエラーメッセージかどうか
@@ -155,8 +157,12 @@ func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 }
 
 func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
-
 	var colorCode string = "34"
+	// 一旦okFileFpを閉じる
+	err := pe.okFileFp.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
 	// isValidate == true の場合はngFileを実行(事前実行)
 	command := exec.Command(pe.PhpPath, pe.okFile)
 
@@ -231,6 +237,8 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
 	pe.ErrorBuffer = []byte{}
+	// 再度新規pointerとしてokFileFpを開く
+	pe.okFileFp, err = os.OpenFile(pe.okFile, os.O_RDWR, 0777)
 	return outputSize, nil
 }
 
@@ -250,35 +258,39 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	}()
 	//panic(errors.New("意図しないエラー"))
 	// PHPのエラーメッセージの正規表現を事前コンパイルする
-	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error`
+	//const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error`
+	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 	pe.IsPermissibleError = false
 
-	// 事前にPHPコマンド <php -l file-name>でシンタックスエラーのみを先にチェックする
-	syntax := exec.Command(pe.PhpPath, "-l", pe.ngFile)
-	syntexBuffer, err := syntax.StderrPipe()
-	if err != nil {
-		panic(err)
-	}
-	_ = syntax.Start()
-	// シンタックスエラーがでている場合
-	loaded, err := io.ReadAll(syntexBuffer)
-	if err != nil {
-		panic(err)
-	}
-	_ = syntax.Wait()
-	if syntax.ProcessState.ExitCode() != 0 {
-		// シンタックスエラーがあった場合
-		//fmt.Printf("Syntax Error: <<<%v>>>\n", string(loaded))
-		pe.IsPermissibleError = true
-		pe.ErrorBuffer = loaded
-		pe.wholeErrors = append(pe.wholeErrors, string(loaded))
-		return true, nil
-	}
+	//// 事前にPHPコマンド <php -l file-name>でシンタックスエラーのみを先にチェックする
+	//syntax := exec.Command(pe.PhpPath, "-l", pe.ngFile)
+	//syntexBuffer, err := syntax.StderrPipe()
+	//if err != nil {
+	//	panic(err)
+	//}
+	//_ = syntax.Start()
+	//// シンタックスエラーがでている場合
+	//loaded, err := io.ReadAll(syntexBuffer)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//_ = syntax.Wait()
+	//if syntax.ProcessState.ExitCode() != 0 {
+	//	// シンタックスエラーがあった場合
+	//	//fmt.Printf("Syntax Error: <<<%v>>>\n", string(loaded))
+	//	pe.IsPermissibleError = true
+	//	pe.ErrorBuffer = loaded
+	//	pe.wholeErrors = append(pe.wholeErrors, string(loaded))
+	//	return true, nil
+	//}
 
 	// 終了コードが不正な場合,FatalErrorを取得する
-	c := exec.Command(pe.PhpPath, pe.ngFile)
-	buffer, _ := c.StderrPipe()
+	c := exec.Command(pe.PhpPath, pe.ngFileFp.Name())
+	buffer, err := c.StderrPipe()
+	if err != nil {
+		fmt.Printf("err in DetectFatalError: %v\n", err)
+	}
 	// 戻り値自体がインターフェースである以上,*os.File型へは代入できない
 	// そのためどうしても具象型にしたい場合は型アサーションを使う
 	buffer, ok := buffer.(*os.File)
@@ -346,13 +358,33 @@ func (pe *PhpExecuter) GetFatalError() []byte {
 }
 
 func (pe *PhpExecuter) SetOkFile(okFile string) {
-	pe.okFile = okFile
+	if pe.okFile == "" {
+		pe.okFile = okFile
+	}
+	if pe.okFileFp == nil {
+		fp, err := os.OpenFile(okFile, os.O_RDWR, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pe.okFileFp = fp
+	}
 }
 func (pe *PhpExecuter) SetNgFile(ngFile string) {
-	pe.ngFile = ngFile
+	if pe.ngFile == "" {
+		pe.ngFile = ngFile
+	}
+	if pe.ngFileFp == nil {
+		fp, err := os.OpenFile(ngFile, os.O_RDWR, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pe.ngFileFp = fp
+	}
 }
 func (pe *PhpExecuter) WriteToNg(input string) int {
-	size, err := FileOpen(pe.ngFile, input)
+	// ngFileのポインタを末尾に移動させる
+	_, _ = io.ReadAll(pe.ngFileFp)
+	size, err := pe.ngFileFp.WriteString(input)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -377,6 +409,41 @@ func (pe *PhpExecuter) Save(saveFileName string) bool {
 	if err != nil {
 		panic(err)
 	}
+	return true
+}
+
+func (pe *PhpExecuter) CopyFromNgToOk() int {
+	_, err := pe.ngFileFp.Seek(0, 0)
+	if err != nil {
+		log.Fatal(err)
+	}
+	allText, err := io.ReadAll(pe.ngFileFp)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_ = pe.okFileFp.Truncate(0)
+	size, err := pe.okFileFp.Write(allText)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return size
+}
+
+// Rollback ----------------------------------------
+// OkFileの中身をNgFileまるっとコピーする
+func (pe *PhpExecuter) Rollback() int {
+	// ロールバック処理
+	// ファイルの内容を全て削除する
+	_ = pe.ngFileFp.Truncate(0)
+	// OkFileのファイルポインタを先頭に移す
+	pe.okFileFp.Seek(0, 0)
+	all, _ := io.ReadAll(pe.okFileFp)
+	size, _ := pe.ngFileFp.Write(all)
+	return size
+}
+func (pe *PhpExecuter) Clear() bool {
+	_ = pe.ngFileFp.Truncate(0)
+	_ = pe.okFileFp.Truncate(0)
 	return true
 }
 
