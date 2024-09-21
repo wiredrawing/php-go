@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
-	"golang.org/x/sys/windows"
+	//"golang.org/x/sys/windows"
 	"io/ioutil"
 	"log"
 	"os"
@@ -280,23 +280,23 @@ func main() {
 		signalChan,
 		os.Interrupt,
 		os.Kill,
-		windows.SIGKILL,
-		windows.SIGHUP,
-		windows.SIGINT,
-		windows.SIGTERM,
-		windows.SIGQUIT,
-		windows.SIGTRAP,
-		windows.SIGSEGV,
-		windows.SIGABRT,
-		windows.Signal(0x0A),
-		windows.Signal(0x0B),
-		windows.Signal(0x0C),
-		windows.Signal(0x0D),
-		windows.Signal(0x0E),
-		windows.Signal(0x0F),
-		windows.Signal(0x10),
-		windows.Signal(0x13),
-		windows.Signal(0x14), // Windowsの場合 SIGTSTPを認識しないためリテラルで指定する
+		//windows.SIGKILL,
+		//windows.SIGHUP,
+		//windows.SIGINT,
+		//windows.SIGTERM,
+		//windows.SIGQUIT,
+		//windows.SIGTRAP,
+		//windows.SIGSEGV,
+		//windows.SIGABRT,
+		//windows.Signal(0x0A),
+		//windows.Signal(0x0B),
+		//windows.Signal(0x0C),
+		//windows.Signal(0x0D),
+		//windows.Signal(0x0E),
+		//windows.Signal(0x0F),
+		//windows.Signal(0x10),
+		//windows.Signal(0x13),
+		//windows.Signal(0x14), // Windowsの場合 SIGTSTPを認識しないためリテラルで指定する
 	)
 
 	// GCを実行

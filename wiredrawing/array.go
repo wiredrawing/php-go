@@ -149,6 +149,10 @@ func (pe *PhpExecuter) SetPreviousList(number int) int {
 	pe.previousLine = number
 	return currenetLine
 }
+func (pe *PhpExecuter) GetPreviousList() int {
+	var currenetLine int = pe.previousLine
+	return currenetLine
+}
 func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 	if phpPath == "" {
 		pe.PhpPath = "php"
@@ -362,7 +366,14 @@ func (pe *PhpExecuter) SetOkFile(okFile string) {
 		pe.okFile = okFile
 	}
 	if pe.okFileFp == nil {
-		fp, err := os.OpenFile(okFile, os.O_RDWR, 0777)
+		fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pe.okFileFp = fp
+	} else {
+		pe.okFileFp.Close()
+		fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -374,7 +385,14 @@ func (pe *PhpExecuter) SetNgFile(ngFile string) {
 		pe.ngFile = ngFile
 	}
 	if pe.ngFileFp == nil {
-		fp, err := os.OpenFile(ngFile, os.O_RDWR, 0777)
+		fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pe.ngFileFp = fp
+	} else {
+		pe.ngFileFp.Close()
+		fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -435,8 +453,15 @@ func (pe *PhpExecuter) Rollback() int {
 	// ロールバック処理
 	// ファイルの内容を全て削除する
 	_ = pe.ngFileFp.Truncate(0)
+	_, err := pe.ngFileFp.Seek(0, 0)
+	if err != nil {
+		log.Fatalf("前実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
+	}
 	// OkFileのファイルポインタを先頭に移す
-	pe.okFileFp.Seek(0, 0)
+	_, err = pe.okFileFp.Seek(0, 0)
+	if err != nil {
+		log.Fatalf("後実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
+	}
 	all, _ := io.ReadAll(pe.okFileFp)
 	size, _ := pe.ngFileFp.Write(all)
 	return size

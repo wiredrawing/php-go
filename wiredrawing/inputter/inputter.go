@@ -70,7 +70,13 @@ func init() {
 	var homeDir string
 	homeDir, _ = os.UserHomeDir()
 	// 本アプリケーション専用の設定ディレクトリ
-	var dotDir = homeDir + "\\.php-go"
+	var dotDir string = ""
+	if runtime.GOOS == "windows" {
+		dotDir = homeDir + "\\.php-go"
+	} else {
+		dotDir = homeDir + "/.php-go"
+	}
+
 	// ディレクトリが存在しない場合は作成する
 	makeDirectory(dotDir)
 
@@ -125,21 +131,21 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	var ngFile = ".validation.dat"
 	var okFile = ".success.dat"
 
-	dname, _ := os.MkdirTemp("", "phpgo_")
-	//fmt.Printf("tempDir: %v\r\n", dname)
-	ngTempF, err := os.CreateTemp(dname, "ngFile.dat")
-	if err != nil {
-		panic(err)
-	}
-	okTempF, err := os.CreateTemp(dname, "okFile.dat")
-	if err != nil {
-		panic(err)
-	}
-
-	ngFile = ngTempF.Name()
-	ngTempF.Close()
-	okFile = okTempF.Name()
-	okTempF.Close()
+	//dname, _ := os.MkdirTemp("", "phpgo_")
+	////fmt.Printf("tempDir: %v\r\n", dname)
+	//ngTempF, err := os.CreateTemp(dname, "ngFile.dat")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//okTempF, err := os.CreateTemp(dname, "okFile.dat")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//
+	//ngFile = ngTempF.Name()
+	//ngTempF.Close()
+	//okFile = okTempF.Name()
+	//okTempF.Close()
 	//filePathForError = dotDir + "\\" + filePathForError
 
 	// OSの一時ファイル作成に任せる
@@ -159,8 +165,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	_, _ = ngFileTemp.Write([]byte("<?php " + "\n"))
 	ngFile = ngFileTemp.Name()
 
-	//previousLine = 0
-
 	// ----------------------------------------------
 	// 標準入力を可能にする
 	// 標準入力の開始
@@ -173,9 +177,20 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	var php = wiredrawing.PhpExecuter{
 		PhpPath: phpExecutePath,
 	}
-	php.SetOkFile(okFile)
-	php.SetNgFile(ngFile)
+
+	// ヘルプメッセージを定義
+	var helpMessages = make([]string, 0, 32)
+	helpMessages = append(helpMessages, fmt.Sprintf("[help]"))
+	helpMessages = append(helpMessages, fmt.Sprintf("clear:    入力途中の内容を破棄します."))
+	helpMessages = append(helpMessages, fmt.Sprintf("rollback: 入力済みの入力を一行ずつ削除します."))
+	helpMessages = append(helpMessages, fmt.Sprintf("cat:      入力済みの内容を表示します."))
+	helpMessages = append(helpMessages, fmt.Sprintf("exit:     アプリケーションを終了します."))
+	helpMessages = append(helpMessages, fmt.Sprintf("errors:   過去のエラーを全て表示します."))
+	var helpMessage = strings.Join(helpMessages, "\n")
+
 	for {
+		php.SetOkFile(okFile)
+		php.SetNgFile(ngFile)
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
 		}
@@ -193,14 +208,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 		}
 
 		if inputText == "help" {
-			var helpMessages = make([]string, 0, 32)
-			helpMessages = append(helpMessages, fmt.Sprintf("[help]"))
-			helpMessages = append(helpMessages, fmt.Sprintf("clear:    入力途中の内容を破棄します."))
-			helpMessages = append(helpMessages, fmt.Sprintf("rollback: 入力済みの入力を一行ずつ削除します."))
-			helpMessages = append(helpMessages, fmt.Sprintf("cat:      入力済みの内容を表示します."))
-			helpMessages = append(helpMessages, fmt.Sprintf("exit:     アプリケーションを終了します."))
-			helpMessages = append(helpMessages, fmt.Sprintf("errors:   過去のエラーを全て表示します."))
-			var helpMessage = strings.Join(helpMessages, "\n")
 			fmt.Println(ColorWrapping("33", helpMessage))
 			continue
 		}
