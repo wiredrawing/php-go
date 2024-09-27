@@ -113,7 +113,7 @@ func init() {
 }
 
 // StandByInput 標準入力を待ち受ける関数
-func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit chan int) (bool, error) {
+func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool, error) {
 	// phpPathが未指定の場合はハイフンが設定されているため
 	// それ以外の場合は指定したphpパスで実行する
 	var phpExecutePath = "php"
@@ -177,6 +177,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string, exit 
 	var php = wiredrawing.PhpExecuter{
 		PhpPath: phpExecutePath,
 	}
+	php.InitDB()
 
 	// ヘルプメッセージを定義
 	var helpMessages = make([]string, 0, 32)

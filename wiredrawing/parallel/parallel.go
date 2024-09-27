@@ -28,14 +28,10 @@ func InterruptProcess(exit chan int, observer chan os.Signal) {
 			// 割り込みを無視
 			exit <- 3
 		} else if s == os.Interrupt {
-			if runtime.GOOS != "darwin" {
-				//fmt.Println("[os.Interrupt]")
-				//fmt.Print("[os.Interrupt].\r\n")
-			}
 			// 割り込みを無視
 			exit <- 4
 		} else if s == syscall.Signal(0x14) {
-			if runtime.GOOS != "darwin" {
+			if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 				fmt.Print("[syscall.SIGTSTP].\r\n")
 			}
 			// 割り込みを無視

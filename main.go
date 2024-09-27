@@ -317,7 +317,7 @@ func main() {
 				fmt.Printf(inputter.ColorWrapping(config.Yellow, "Please input the word 'exit' to exit the program.\r\n"))
 				//fmt.Print("[Ignored interrupt].\r\n")
 			} else {
-				if runtime.GOOS != "darwin" {
+				if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
 					fmt.Print("[Ignored interrupt].\r\n")
 				}
 			}
@@ -332,7 +332,7 @@ func main() {
 		if err := recover(); err != nil {
 			if err, ok := err.(error); ok {
 				fmt.Println(err)
-				_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName, exit)
+				_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName)
 			} else {
 				fmt.Printf("%T\r\n", err)
 				fmt.Println("errorの型アサーションに失敗")
@@ -340,7 +340,7 @@ func main() {
 		}
 	}()
 	fmt.Println(inputter.ColorWrapping(config.Green, "[The applicaiton was just started.]"))
-	_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName, exit)
+	_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName)
 	if err != nil {
 		panic(err)
 	}

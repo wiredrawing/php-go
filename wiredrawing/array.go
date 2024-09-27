@@ -2,8 +2,10 @@ package wiredrawing
 
 import (
 	"bufio"
+	"database/sql"
 	"errors"
 	"fmt"
+	_ "github.com/mattn/go-sqlite3"
 	"io"
 	"io/ioutil"
 	"log"
@@ -53,7 +55,6 @@ func ArraySearch(needle string, haystack []string) int {
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
 func StdInput() string {
-
 	// 入力モードの選択用入力
 	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	var result bool = scanner.Scan()
@@ -129,6 +130,55 @@ type PhpExecuter struct {
 	isAllowable bool
 	// アプリケーション起動時からの全エラーメッセージを保持する
 	wholeErrors []string
+	db          *sql.DB
+}
+
+func (p *PhpExecuter) nextId() int {
+	// 一時的にローカル変数に
+	var db *sql.DB = p.db
+	var nextId int
+	tx, _ := db.Begin()
+	rows, _ := tx.Query("select max(id) from phptext limit 1")
+	for rows.Next() {
+		_ = rows.Scan(&nextId)
+		nextId++
+	}
+	// 意味はないけどcommit
+	_ = tx.Commit()
+	return nextId
+}
+func (p *PhpExecuter) InitDB() *sql.DB {
+	// sqliteの初期化
+	dbDir, err := os.MkdirTemp("", "")
+	if err != nil {
+		panic(err)
+	}
+	db, err := sql.Open("sqlite3", dbDir+"/"+"php.db")
+	p.db = db
+	if err != nil {
+		panic(err)
+	}
+
+	createSql := `
+	create table phptext (
+	    id integer not null primary key,
+	    text text not null ,
+	    is_production int
+	)`
+	_, err = db.Exec(createSql)
+	if err != nil {
+		panic(err)
+	}
+	//tx, err := db.Begin()
+	//rows, _ := tx.Query("select max(id) from phptext limit 1")
+	//for rows.Next() {
+	//	var maxId int
+	//	_ = rows.Scan(&maxId)
+	//	fmt.Printf("現在のプライマリキーは maxId: %v", maxId)
+	//	// adding 1 to primary key
+	//	maxId += 1
+	//}
+	return db
 }
 
 // WholeErrors ----------------------------------------
@@ -400,6 +450,19 @@ func (pe *PhpExecuter) SetNgFile(ngFile string) {
 	}
 }
 func (pe *PhpExecuter) WriteToNg(input string) int {
+	var err error = nil
+	// sqliteへ書き込む
+	tx, _ := pe.db.Begin()
+	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
+	if err != nil {
+		panic(err)
+	}
+	// 取得したnextID, 本文, 実行するタイミング
+	_, _ = st.Exec(pe.nextId(), input, 0)
+	err = tx.Commit()
+	if err != nil {
+		panic(err)
+	}
 	// ngFileのポインタを末尾に移動させる
 	_, _ = io.ReadAll(pe.ngFileFp)
 	size, err := pe.ngFileFp.WriteString(input)
