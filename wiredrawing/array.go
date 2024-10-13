@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/glebarez/go-sqlite"
 	"io"
 	"io/ioutil"
 	"log"
@@ -86,7 +86,7 @@ func StdInput() string {
 					fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
 					continue
 				}
-			} else if value == "cat" {
+			} else if value == "cat" || value == "history" || value == "log" {
 				// 現在までの入力を確認する
 				var indexStr string = ""
 				for index, value := range readString {
@@ -129,8 +129,9 @@ type PhpExecuter struct {
 	// 許容可能なエラーメッセージかどうか
 	isAllowable bool
 	// アプリケーション起動時からの全エラーメッセージを保持する
-	wholeErrors []string
-	db          *sql.DB
+	wholeErrors  []string
+	db           *sql.DB
+	DatabasePath string
 }
 
 func (p *PhpExecuter) nextId() int {
@@ -147,13 +148,35 @@ func (p *PhpExecuter) nextId() int {
 	_ = tx.Commit()
 	return nextId
 }
-func (p *PhpExecuter) InitDB() *sql.DB {
-	// sqliteの初期化
-	dbDir, err := os.MkdirTemp("", "")
-	if err != nil {
-		panic(err)
+func (p *PhpExecuter) currentId() int {
+	var db *sql.DB = p.db
+	var currentId int = 0
+	tx, _ := db.Begin()
+	rows, _ := tx.Query("select max(id) from phptext")
+	for rows.Next() {
+		err := rows.Scan(&currentId)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	db, err := sql.Open("sqlite3", dbDir+"/"+"php.db")
+	err := tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
+	return currentId
+}
+func (p *PhpExecuter) InitDB() *sql.DB {
+	// sqliteの初期化R
+	path, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+	var dbPath string = path + "/" + ".php.db"
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) != true {
+		_ = os.Remove(dbPath)
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	p.DatabasePath = dbPath
 	p.db = db
 	if err != nil {
 		panic(err)
@@ -161,7 +184,7 @@ func (p *PhpExecuter) InitDB() *sql.DB {
 
 	createSql := `
 	create table phptext (
-	    id integer not null primary key,
+	    id integer not null,
 	    text text not null ,
 	    is_production int
 	)`
@@ -169,15 +192,18 @@ func (p *PhpExecuter) InitDB() *sql.DB {
 	if err != nil {
 		panic(err)
 	}
-	//tx, err := db.Begin()
-	//rows, _ := tx.Query("select max(id) from phptext limit 1")
-	//for rows.Next() {
-	//	var maxId int
-	//	_ = rows.Scan(&maxId)
-	//	fmt.Printf("現在のプライマリキーは maxId: %v", maxId)
-	//	// adding 1 to primary key
-	//	maxId += 1
-	//}
+	// 実行結果を格納するテーブルを作成
+	var sql string = `
+		create table results (
+		    id integer not null primary key autoincrement,
+		    result text not null,
+		    phptext_id integer not null
+		)`
+	// Make a table to save executed result.
+	_, err = db.Exec(sql)
+	if err != nil {
+		log.Fatal(err)
+	}
 	return db
 }
 
@@ -230,7 +256,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	}
 	var currentLine int
 
-	const ensureLength int = 256
+	const ensureLength int = 1024
 
 	currentLine = 0
 	var outputSize int = 0
@@ -253,6 +279,9 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 		// 正味のバッファを取り出す
 		readData = readData[:n]
 		//bufferWhenError += string(readData)
+
+		//// 実行結果としてSqliteに保存する
+		//pe.WriteResultToDB(string(readData))
 
 		from := currentLine
 		to := currentLine + n
@@ -449,8 +478,36 @@ func (pe *PhpExecuter) SetNgFile(ngFile string) {
 		pe.ngFileFp = fp
 	}
 }
-func (pe *PhpExecuter) WriteToNg(input string) int {
-	var err error = nil
+
+// PHPファイルの実行結果をSqliteに保存
+func (p *PhpExecuter) WriteResultToDB(result string) bool {
+	db := p.db
+	// Start transaction.
+	tx, _ := db.Begin()
+	rows, err := tx.Query("select max(id) from phptext")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if rows.Next() != true {
+		log.Fatal("Failed fetching lastest primary key on phptext table.")
+	}
+	var lastestId int = 0
+	if err := rows.Scan(&lastestId); err != nil {
+		log.Fatal(err)
+	}
+
+	statement, _ := tx.Prepare("insert into results (result, phptext_id) values (?, ?)")
+	if _, err := statement.Exec(result, lastestId); err != nil {
+		log.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		log.Fatal(err)
+	}
+	return true
+}
+
+// WriteToDB 指定したテキストをSqliteに書き込む
+func (pe *PhpExecuter) WriteToDB(input string, isProduction int) {
 	// sqliteへ書き込む
 	tx, _ := pe.db.Begin()
 	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
@@ -458,17 +515,22 @@ func (pe *PhpExecuter) WriteToNg(input string) int {
 		panic(err)
 	}
 	// 取得したnextID, 本文, 実行するタイミング
-	_, _ = st.Exec(pe.nextId(), input, 0)
+	_, _ = st.Exec(pe.nextId(), input, isProduction)
 	err = tx.Commit()
 	if err != nil {
 		panic(err)
 	}
+}
+
+func (pe *PhpExecuter) WriteToNg(input string) int {
+	var err error = nil
 	// ngFileのポインタを末尾に移動させる
 	_, _ = io.ReadAll(pe.ngFileFp)
 	size, err := pe.ngFileFp.WriteString(input)
 	if err != nil {
 		log.Fatal(err)
 	}
+	pe.WriteToDB(input, 0)
 	return size
 }
 
@@ -493,7 +555,7 @@ func (pe *PhpExecuter) Save(saveFileName string) bool {
 	return true
 }
 
-func (pe *PhpExecuter) CopyFromNgToOk() int {
+func (pe *PhpExecuter) CopyFromNgToOk() (int, []byte) {
 	_, err := pe.ngFileFp.Seek(0, 0)
 	if err != nil {
 		log.Fatal(err)
@@ -507,7 +569,7 @@ func (pe *PhpExecuter) CopyFromNgToOk() int {
 	if err != nil {
 		log.Fatal(err)
 	}
-	return size
+	return size, allText
 }
 
 // Rollback ----------------------------------------
@@ -527,6 +589,15 @@ func (pe *PhpExecuter) Rollback() int {
 	}
 	all, _ := io.ReadAll(pe.okFileFp)
 	size, _ := pe.ngFileFp.Write(all)
+
+	var db *sql.DB = pe.db
+	tx, _ := db.Begin()
+	statment, _ := tx.Prepare("delete from phptext where id = ?")
+	_, _ = statment.Exec(pe.currentId())
+	err = tx.Commit()
+	if err != nil {
+		log.Fatal(err)
+	}
 	return size
 }
 func (pe *PhpExecuter) Clear() bool {

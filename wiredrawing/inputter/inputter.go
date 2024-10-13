@@ -250,6 +250,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			_, _ = php.Execute(false)
 			_ = concatenate(ngFile)
 			php.SetPreviousList(cl)
+			php.Rollback()
 			continue
 		}
 
@@ -337,7 +338,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			continue
 		}
 
-		_ = php.CopyFromNgToOk()
+		_, _ = php.CopyFromNgToOk()
 
 		if outputSize, err := php.Execute(true); err != nil {
 			fmt.Println(ColorWrapping("31", err.Error()))
