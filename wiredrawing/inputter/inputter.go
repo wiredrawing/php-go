@@ -226,14 +226,15 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			continue
 		}
 		if inputText == "rollback" {
-			lines, err := wiredrawing.File(ngFile)
-			if err != nil {
-				panic(err)
-			}
-			if len(lines) == 1 {
-				continue
-			}
-			_ = popStirngToFile(ngFile, -1)
+			//lines, err := wiredrawing.File(ngFile)
+			//if err != nil {
+			//	panic(err)
+			//}
+			//if len(lines) == 1 {
+			//	continue
+			//}
+			//_ = popStirngToFile(ngFile, -1)
+			php.Rollback()
 			isFatal, _ := php.DetectFatalError()
 			errorBuffer := php.ErrorBuffer
 			if isFatal == true {
@@ -248,9 +249,14 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			//php.SetOkFile(ngFile)
 			cl := php.SetPreviousList(0)
 			_, _ = php.Execute(false)
-			_ = concatenate(ngFile)
+			//_ = concatenate(ngFile)
+			logs := php.Cat()
+			for index := range logs {
+				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
+				fmt.Print(ColorWrapping("34", indexStr) + ": ")
+				fmt.Println(ColorWrapping("32", (logs[index]["text"]).(string)))
+			}
 			php.SetPreviousList(cl)
-			php.Rollback()
 			continue
 		}
 
@@ -305,16 +311,11 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		if inputText == "cat" {
 			logs := php.Cat()
 			for index := range logs {
-				indexStr := fmt.Sprintf("%03d", logs[index]["id"])
+				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
 				fmt.Print(ColorWrapping("34", indexStr) + ": ")
-				if value, ok := (logs[index]["text"]).(string); ok {
-					fmt.Println(ColorWrapping("32", value))
-				} else {
-					fmt.Println(ColorWrapping("32", " ??? "))
-				}
-
+				fmt.Println(ColorWrapping("32", (logs[index]["text"]).(string)))
 			}
-			concatenate(ngFile)
+			//concatenate(ngFile)
 			continue
 		}
 
@@ -350,7 +351,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			continue
 		}
 
-		_, _ = php.CopyFromNgToOk()
+		//_, _ = php.CopyFromNgToOk()
 
 		if outputSize, err := php.Execute(true); err != nil {
 			fmt.Println(ColorWrapping("31", err.Error()))

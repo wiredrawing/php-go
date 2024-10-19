@@ -12,7 +12,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/debug"
@@ -56,55 +55,7 @@ func ArraySearch(needle string, haystack []string) int {
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
 
-var (
-	history_fn = filepath.Join(os.TempDir(), ".liner_example_history")
-	names      = []string{"\t\t\t\t"}
-)
-
 func StdInput(prompt string) string {
-	//line := liner.NewLiner()
-	//line.SetTabCompletionStyle(liner.TabCircular)
-	//app, _ := liner.TerminalMode()
-	//err := app.ApplyMode()
-	//if err != nil {
-	//	return ""
-	//}
-	//line.SetMultiLineMode(true)
-
-	//line.SetCtrlCAborts(true)
-
-	//line.SetCompleter(func(line string) (c []string) {
-	//	for _, n := range names {
-	//		if strings.HasPrefix(n, strings.ToLower(line)) {
-	//			c = append(c, n)
-	//		}
-	//	}
-	//	return c
-	//})
-	//if f, err := os.Open(history_fn); err == nil {
-	//	line.ReadHistory(f)
-	//	f.Close()
-	//}
-
-	//if name, err := line.Prompt(prompt); err == nil {
-	//	//if name, err := line.PromptWithSuggestion(">>> ", "", 4); err == nil {
-	//	input = name
-	//	line.AppendHistory(name)
-	//} else if err == liner.ErrPromptAborted {
-	//	log.Print("Aborted")
-	//} else {
-	//	log.Print("Error reading line: ", err)
-	//}
-
-	//if f, err := os.Create(history_fn); err != nil {
-	//	log.Print("Error writing history file: ", err)
-	//} else {
-	//	line.WriteHistory(f)
-	//	f.Close()
-	//}
-	//line.Close()
-
-	//return input
 	// 入力モードの選択用入力
 	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	var result bool = scanner.Scan()
@@ -129,23 +80,14 @@ func StdInput(prompt string) string {
 			scanner.Scan()
 			value := scanner.Text()
 
-			if value == "rollback" {
-				if len(readString) > 0 {
-					var lastString string = readString[len(readString)-1]
-					readString = readString[0 : len(readString)-1]
-					fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
-					continue
-				}
-			} else if value == "cat" || value == "history" || value == "log" {
-				//// 現在までの入力を確認する
-				//var indexStr string = ""
-				//for index, value := range readString {
-				//	indexStr = fmt.Sprintf("%03d", index)
-				//	fmt.Print(colorWrapping("34", indexStr) + ": ")
-				//	fmt.Println(colorWrapping("32", value))
-				//}
-				continue
-			}
+			//if value == "rollback" {
+			//	if len(readString) > 0 {
+			//		var lastString string = readString[len(readString)-1]
+			//		readString = readString[0 : len(readString)-1]
+			//		fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
+			//		continue
+			//	}
+			//}
 			if value == "" {
 				break
 			}
@@ -254,6 +196,11 @@ func (p *PhpExecuter) InitDB() *sql.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
+	nextId := p.nextId()
+	tx, _ := db.Begin()
+	st, _ := db.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
+	st.Exec(nextId, "<?php", 1)
+	tx.Commit()
 	return db
 }
 
@@ -270,7 +217,7 @@ func (pe *PhpExecuter) ResetWholeErrors() {
 
 func (pe *PhpExecuter) Cat() []map[string]interface{} {
 	db := pe.db
-	query, err := db.Query("select id, text from phptext order by id desc")
+	query, err := db.Query("select id, text from phptext order by id asc")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -310,14 +257,23 @@ func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
 }
 
 func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
-	var colorCode string = "34"
-	// 一旦okFileFpを閉じる
-	err := pe.okFileFp.Close()
-	if err != nil {
-		log.Fatal(err)
+	logs := pe.Cat()
+	phpLogs := ""
+	for index := range logs {
+		phpLogs += logs[index]["text"].(string) + "\n"
 	}
+	fp, _ := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
+	fp.Truncate(0)
+	fp.Seek(0, 0)
+	fp.WriteString(phpLogs)
+	var colorCode string = "34"
+	//// 一旦okFileFpを閉じるff
+	//err := pe.okFileFp.Close()
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 	// isValidate == true の場合はngFileを実行(事前実行)
-	command := exec.Command(pe.PhpPath, pe.okFile)
+	command := exec.Command(pe.PhpPath, fp.Name())
 
 	buffer, err := command.StdoutPipe()
 	if err != nil {
@@ -393,8 +349,8 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
 	pe.ErrorBuffer = []byte{}
-	// 再度新規pointerとしてokFileFpを開く
-	pe.okFileFp, err = os.OpenFile(pe.okFile, os.O_RDWR, 0777)
+	//// 再度新規pointerとしてokFileFpを開く
+	//pe.okFileFp, err = os.OpenFile(pe.okFile, os.O_RDWR, 0777)
 	return outputSize, nil
 }
 
@@ -441,8 +397,17 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	//	return true, nil
 	//}
 
+	logs := pe.Cat()
+	phpLogs := ""
+	for index := range logs {
+		phpLogs += logs[index]["text"].(string) + "\n"
+	}
+	fp, _ := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
+	fp.Truncate(0)
+	fp.Seek(0, 0)
+	fp.WriteString(phpLogs)
 	// 終了コードが不正な場合,FatalErrorを取得する
-	c := exec.Command(pe.PhpPath, pe.ngFileFp.Name())
+	c := exec.Command(pe.PhpPath, fp.Name())
 	buffer, err := c.StderrPipe()
 	if err != nil {
 		fmt.Printf("err in DetectFatalError: %v\n", err)
@@ -518,18 +483,18 @@ func (pe *PhpExecuter) SetOkFile(okFile string) {
 		pe.okFile = okFile
 	}
 	if pe.okFileFp == nil {
-		fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pe.okFileFp = fp
+		//fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
+		//if err != nil {
+		//	log.Fatal(err)
+		//}
+		//pe.okFileFp = fp
 	} else {
-		pe.okFileFp.Close()
-		fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pe.okFileFp = fp
+		//pe.okFileFp.Close()
+		//fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
+		//if err != nil {
+		//	log.Fatal(err)
+		//}
+		//pe.okFileFp = fp
 	}
 }
 func (pe *PhpExecuter) SetNgFile(ngFile string) {
@@ -537,18 +502,18 @@ func (pe *PhpExecuter) SetNgFile(ngFile string) {
 		pe.ngFile = ngFile
 	}
 	if pe.ngFileFp == nil {
-		fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pe.ngFileFp = fp
+		//fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
+		//if err != nil {
+		//	log.Fatal(err)
+		//}
+		//pe.ngFileFp = fp
 	} else {
-		pe.ngFileFp.Close()
-		fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pe.ngFileFp = fp
+		//pe.ngFileFp.Close()
+		//fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
+		//if err != nil {
+		//	log.Fatal(err)
+		//}
+		//pe.ngFileFp = fp
 	}
 }
 
@@ -580,7 +545,7 @@ func (p *PhpExecuter) WriteResultToDB(result string) bool {
 }
 
 // WriteToDB 指定したテキストをSqliteに書き込む
-func (pe *PhpExecuter) WriteToDB(input string, isProduction int) {
+func (pe *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	// sqliteへ書き込む
 	tx, _ := pe.db.Begin()
 	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
@@ -588,23 +553,26 @@ func (pe *PhpExecuter) WriteToDB(input string, isProduction int) {
 		panic(err)
 	}
 	// 取得したnextID, 本文, 実行するタイミング
-	_, _ = st.Exec(pe.nextId(), input, isProduction)
+	cleansing := strings.TrimRight(input, "\r\n ")
+	result, _ := st.Exec(pe.nextId(), cleansing, isProduction)
+	latestId, err := result.LastInsertId()
 	err = tx.Commit()
 	if err != nil {
 		panic(err)
 	}
+	return latestId
 }
 
-func (pe *PhpExecuter) WriteToNg(input string) int {
-	var err error = nil
-	// ngFileのポインタを末尾に移動させる
-	_, _ = io.ReadAll(pe.ngFileFp)
-	size, err := pe.ngFileFp.WriteString(input)
-	if err != nil {
-		log.Fatal(err)
-	}
-	pe.WriteToDB(input, 0)
-	return size
+func (pe *PhpExecuter) WriteToNg(input string) int64 {
+	//var err error = nil
+	//// ngFileのポインタを末尾に移動させる
+	//_, _ = io.ReadAll(pe.ngFileFp)
+	//size, err := pe.ngFileFp.WriteString(input)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	latestId := pe.WriteToDB(input, 0)
+	return latestId
 }
 
 func (pe *PhpExecuter) Save(saveFileName string) bool {
@@ -628,22 +596,22 @@ func (pe *PhpExecuter) Save(saveFileName string) bool {
 	return true
 }
 
-func (pe *PhpExecuter) CopyFromNgToOk() (int, []byte) {
-	_, err := pe.ngFileFp.Seek(0, 0)
-	if err != nil {
-		log.Fatal(err)
-	}
-	allText, err := io.ReadAll(pe.ngFileFp)
-	if err != nil {
-		log.Fatal(err)
-	}
-	_ = pe.okFileFp.Truncate(0)
-	size, err := pe.okFileFp.Write(allText)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return size, allText
-}
+//func (pe *PhpExecuter) CopyFromNgToOk() (int, []byte) {
+//	_, err := pe.ngFileFp.Seek(0, 0)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	allText, err := io.ReadAll(pe.ngFileFp)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	_ = pe.okFileFp.Truncate(0)
+//	size, err := pe.okFileFp.Write(allText)
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	return size, allText
+//}
 
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
@@ -676,8 +644,8 @@ func (pe *PhpExecuter) Rollback() int {
 	return size
 }
 func (pe *PhpExecuter) Clear() bool {
-	_ = pe.ngFileFp.Truncate(0)
-	_ = pe.okFileFp.Truncate(0)
+	//_ = pe.ngFileFp.Truncate(0)
+	//_ = pe.okFileFp.Truncate(0)
 	return true
 }
 

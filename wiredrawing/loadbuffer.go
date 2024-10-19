@@ -15,7 +15,7 @@ import (
 func LoadBuffer(buffer io.ReadCloser, previousLine *int, showBuffer bool, whenError bool, colorCode string) (string, int) {
 	var currentLine int
 
-	const ensureLength int = 512
+	const ensureLength int = 1024
 
 	currentLine = 0
 	var outputSize int = 0
