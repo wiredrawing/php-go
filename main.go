@@ -170,7 +170,7 @@ func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance 
 				fmt.Println(inputter.ColorWrapping("31", string(bytes)))
 				continue
 			}
-			fmt.Println(" >>> ")
+			//fmt.Println(" >>> ")
 			size, err := php.Execute(true)
 			if err != nil {
 				panic(err)

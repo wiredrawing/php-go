@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"runtime/debug"
@@ -54,7 +55,56 @@ func ArraySearch(needle string, haystack []string) int {
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
-func StdInput() string {
+
+var (
+	history_fn = filepath.Join(os.TempDir(), ".liner_example_history")
+	names      = []string{"\t\t\t\t"}
+)
+
+func StdInput(prompt string) string {
+	//line := liner.NewLiner()
+	//line.SetTabCompletionStyle(liner.TabCircular)
+	//app, _ := liner.TerminalMode()
+	//err := app.ApplyMode()
+	//if err != nil {
+	//	return ""
+	//}
+	//line.SetMultiLineMode(true)
+
+	//line.SetCtrlCAborts(true)
+
+	//line.SetCompleter(func(line string) (c []string) {
+	//	for _, n := range names {
+	//		if strings.HasPrefix(n, strings.ToLower(line)) {
+	//			c = append(c, n)
+	//		}
+	//	}
+	//	return c
+	//})
+	//if f, err := os.Open(history_fn); err == nil {
+	//	line.ReadHistory(f)
+	//	f.Close()
+	//}
+
+	//if name, err := line.Prompt(prompt); err == nil {
+	//	//if name, err := line.PromptWithSuggestion(">>> ", "", 4); err == nil {
+	//	input = name
+	//	line.AppendHistory(name)
+	//} else if err == liner.ErrPromptAborted {
+	//	log.Print("Aborted")
+	//} else {
+	//	log.Print("Error reading line: ", err)
+	//}
+
+	//if f, err := os.Create(history_fn); err != nil {
+	//	log.Print("Error writing history file: ", err)
+	//} else {
+	//	line.WriteHistory(f)
+	//	f.Close()
+	//}
+	//line.Close()
+
+	//return input
 	// 入力モードの選択用入力
 	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	var result bool = scanner.Scan()
@@ -71,11 +121,11 @@ func StdInput() string {
 		var readString []string
 		var s = 0
 		for {
-			if s > 0 {
-				fmt.Printf("%s%s", " ... ", " ... ")
-			} else {
-				fmt.Printf("%s%s", " ... ", " >>> ")
-			}
+			//if s > 0 {
+			//	fmt.Printf("%s%s", " ... ", " ... ")
+			//} else {
+			//	fmt.Printf("%s%s", " ... ", " >>> ")
+			//}
 			scanner.Scan()
 			value := scanner.Text()
 
@@ -87,13 +137,13 @@ func StdInput() string {
 					continue
 				}
 			} else if value == "cat" || value == "history" || value == "log" {
-				// 現在までの入力を確認する
-				var indexStr string = ""
-				for index, value := range readString {
-					indexStr = fmt.Sprintf("%03d", index)
-					fmt.Print(colorWrapping("34", indexStr) + ": ")
-					fmt.Println(colorWrapping("32", value))
-				}
+				//// 現在までの入力を確認する
+				//var indexStr string = ""
+				//for index, value := range readString {
+				//	indexStr = fmt.Sprintf("%03d", index)
+				//	fmt.Print(colorWrapping("34", indexStr) + ": ")
+				//	fmt.Println(colorWrapping("32", value))
+				//}
 				continue
 			}
 			if value == "" {
@@ -216,6 +266,29 @@ func (pe *PhpExecuter) WholeErrors() []string {
 // 溜まったエラーメッセージをリセットする
 func (pe *PhpExecuter) ResetWholeErrors() {
 	pe.wholeErrors = []string{}
+}
+
+func (pe *PhpExecuter) Cat() []map[string]interface{} {
+	db := pe.db
+	query, err := db.Query("select id, text from phptext order by id desc")
+	if err != nil {
+		log.Fatal(err)
+	}
+	var logs []map[string]interface{}
+	for query.Next() {
+		var id int
+		var text string
+		err := query.Scan(&id, &text)
+		if err != nil {
+			log.Fatal(err)
+		}
+		var tempMap map[string]interface{} = map[string]interface{}{
+			"id":   id,
+			"text": text,
+		}
+		logs = append(logs, tempMap)
+	}
+	return logs
 }
 
 // SetPreviousList ----------------------------------------
@@ -575,22 +648,24 @@ func (pe *PhpExecuter) CopyFromNgToOk() (int, []byte) {
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
 func (pe *PhpExecuter) Rollback() int {
+	var size int = 0
 	// ロールバック処理
 	// ファイルの内容を全て削除する
-	_ = pe.ngFileFp.Truncate(0)
-	_, err := pe.ngFileFp.Seek(0, 0)
-	if err != nil {
-		log.Fatalf("前実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
-	}
-	// OkFileのファイルポインタを先頭に移す
-	_, err = pe.okFileFp.Seek(0, 0)
-	if err != nil {
-		log.Fatalf("後実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
-	}
-	all, _ := io.ReadAll(pe.okFileFp)
-	size, _ := pe.ngFileFp.Write(all)
+	//_ = pe.ngFileFp.Truncate(0)
+	//_, err := pe.ngFileFp.Seek(0, 0)
+	//if err != nil {
+	//	log.Fatalf("前実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
+	//}
+	//// OkFileのファイルポインタを先頭に移す
+	//_, err = pe.okFileFp.Seek(0, 0)
+	//if err != nil {
+	//	log.Fatalf("後実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
+	//}
+	//all, _ := io.ReadAll(pe.okFileFp)
+	//size, _ := pe.ngFileFp.Write(all)
 
 	var db *sql.DB = pe.db
+	var err error = nil
 	tx, _ := db.Begin()
 	statment, _ := tx.Prepare("delete from phptext where id = ?")
 	_, _ = statment.Exec(pe.currentId())

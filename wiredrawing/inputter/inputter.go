@@ -194,12 +194,12 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		php.SetNgFile(ngFile)
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
+			fmt.Print(ColorWrapping("33", prompt))
+		} else {
+			fmt.Print(ColorWrapping("0", prompt))
 		}
-		fmt.Print(prompt)
-		// Terminalのカラーリングを白に戻す
-		fmt.Print(ColorWrapping("0", ""))
 		// 両端のスペースを削除
-		rawInputText := wiredrawing.StdInput()
+		rawInputText := wiredrawing.StdInput("")
 		//previousInputText = inputText
 		inputText = strings.TrimSpace(rawInputText)
 
@@ -264,7 +264,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			fmt.Println(ColorWrapping("31", "[PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。]"))
 			fmt.Print(prompt)
 			// 両端のスペースを削除
-			var inputText = wiredrawing.StdInput()
+			var inputText = wiredrawing.StdInput(prompt)
 			inputText = strings.TrimSpace(inputText)
 			// 入力内容が空文字の場合コマンドラインを終了する
 			if len(inputText) == 0 {
@@ -277,6 +277,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				// string型を[]byteに変換して書き込み
 				var messageToEnd = []byte("Thank you for using me! Good by.")
 				_, err := os.Stdout.Write([]byte(ColorWrapping("34", string(messageToEnd))))
+				os.Stdout.Write([]byte("\n\n"))
 				if err != nil {
 					return false, err
 				}
@@ -302,6 +303,17 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 
 		// cat と入力すると現在まで入力している内容を出力する
 		if inputText == "cat" {
+			logs := php.Cat()
+			for index := range logs {
+				indexStr := fmt.Sprintf("%03d", logs[index]["id"])
+				fmt.Print(ColorWrapping("34", indexStr) + ": ")
+				if value, ok := (logs[index]["text"]).(string); ok {
+					fmt.Println(ColorWrapping("32", value))
+				} else {
+					fmt.Println(ColorWrapping("32", " ??? "))
+				}
+
+			}
 			concatenate(ngFile)
 			continue
 		}
