@@ -2,16 +2,21 @@ package wiredrawing
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	_ "github.com/glebarez/go-sqlite"
+	"github.com/hymkor/go-multiline-ny"
+	"github.com/mattn/go-colorable"
+	"github.com/nyaosorg/go-readline-ny/simplehistory"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/exec"
+	"phpgo/config"
 	"regexp"
 	"runtime"
 	"runtime/debug"
@@ -36,26 +41,65 @@ func InArray(needle string, haystack []string) bool {
 	return false
 }
 
-// ArraySearch ------------------------------------------------
-// PHPのarray_search関数をシミュレーション
-// 第一引数にマッチする要素のキーを返却
-// 要素が対象のスライス内に存在しない場合は-1
-// ------------------------------------------------
-func ArraySearch(needle string, haystack []string) int {
-
-	for index, value := range haystack {
-		if value == needle {
-			return index
-		}
-	}
-	return -1
-}
-
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
 
 func StdInput(prompt string) string {
+
+	ctx := context.Background()
+	//fmt.Println("C-m or Enter      : Insert a linefeed")
+	//fmt.Println("C-p or UP         : Move to the previous line.")
+	//fmt.Println("C-n or DOWN       : Move to the next line")
+	//fmt.Println("C-j               : Submit")
+	//fmt.Println("C-c               : Abort.")
+	//fmt.Println("C-D with no chars : Quit.")
+	//fmt.Println("C-UP   or M-P     : Move to the previous history entry")
+	//fmt.Println("C-DOWN or M-N     : Move to the next history entry")
+
+	var ed multiline.Editor
+	ed.SetPrompt(func(w io.Writer, lnum int) (int, error) {
+		return fmt.Fprintf(w, "[%d] ", lnum+1)
+	})
+	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
+		for number, value := range lines {
+			if (number == 0) && (value == "exit") {
+				return true
+			}
+		}
+		if index >= 1 {
+			if (lines[index-1] == "") && (lines[index] == "") {
+				return true
+			}
+		}
+		return false
+
+		//fmt.Printf("lines: %v\n", lines)
+		//fmt.Printf("int => %v", index)
+		//return strings.HasSuffix(strings.TrimSpace(lines[len(lines)-1]), ";")
+	})
+	// To enable escape sequence on Windows.
+	// (On other operating systems, it can be ommited)
+	ed.SetWriter(colorable.NewColorableStdout())
+
+	history := simplehistory.New()
+	ed.SetHistory(history)
+	ed.SetHistoryCycling(true)
+
+	for {
+		lines, err := ed.Read(ctx)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
+			return strings.Join(lines, "")
+		}
+		L := strings.Join(lines, "\n")
+		//fmt.Println("-----")
+		//fmt.Println(L)
+		//fmt.Println("-----")
+		history.Add(L)
+		return strings.Join(lines, "\n")
+	}
+
 	// 入力モードの選択用入力
 	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
 	var result bool = scanner.Scan()
@@ -266,7 +310,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	fp.Truncate(0)
 	fp.Seek(0, 0)
 	fp.WriteString(phpLogs)
-	var colorCode string = "34"
+	var colorCode string = config.Blue
 	//// 一旦okFileFpを閉じるff
 	//err := pe.okFileFp.Close()
 	//if err != nil {
@@ -285,7 +329,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	}
 	var currentLine int
 
-	const ensureLength int = 1024
+	const ensureLength int = 4096
 
 	currentLine = 0
 	var outputSize int = 0
@@ -551,6 +595,10 @@ func (pe *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
 	if err != nil {
 		panic(err)
+	}
+	if int(input[0]) == 27 {
+		tx.Rollback()
+		return 0
 	}
 	// 取得したnextID, 本文, 実行するタイミング
 	cleansing := strings.TrimRight(input, "\r\n ")

@@ -3,15 +3,12 @@ package inputter
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"phpgo/config"
 	"phpgo/wiredrawing"
 	"runtime"
 	"runtime/debug"
-	"strconv"
 	"strings"
 )
 
@@ -196,7 +193,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			fmt.Print("\033[33m")
 			fmt.Print(ColorWrapping("33", prompt))
 		} else {
-			fmt.Print(ColorWrapping("0", prompt))
+			//fmt.Print(ColorWrapping("0", prompt))
 		}
 		// 両端のスペースを削除
 		rawInputText := wiredrawing.StdInput("")
@@ -268,7 +265,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			// コンソールを終了するための標準入力を取得する
 
 			fmt.Println(ColorWrapping("31", "[PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。]"))
-			fmt.Print(prompt)
+			//fmt.Print(prompt)
 			// 両端のスペースを削除
 			var inputText = wiredrawing.StdInput(prompt)
 			inputText = strings.TrimSpace(inputText)
@@ -370,155 +367,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	return true, nil
 }
 
-func hasIndex(slice []string, index int) bool {
-	return (0 <= index) && (index < len(slice))
-}
-
 func ColorWrapping(colorCode string, text string) string {
 	return "\033[" + colorCode + "m" + text + "\033[0m"
-}
-
-// popStirngToFile 指定したファイルの指定した行を削除する
-// 指定する行数は 1から開始させる
-func popStirngToFile(filePath string, row int) error {
-	// 削除する行の指定は -1 あるいは 1以上とする
-	// -1の場合は最後の行を削除する
-	if row != -1 && row <= 0 {
-		return fmt.Errorf("the row number is invalid")
-	}
-	var file *os.File
-	file, err := os.OpenFile(filePath, os.O_RDWR, 0777)
-	if err != nil {
-		return err
-	}
-	var bodyByte []byte
-	// 一行ずつ読み込んだ結果の文字列の配列
-	var bodyString []string
-	var temp []byte
-	bodyByte, err = ioutil.ReadAll(file)
-	for _, value := range bodyByte {
-		if value == '\n' {
-			s := string(temp)
-			if len(s) > 0 {
-				bodyString = append(bodyString, s)
-				temp = nil
-			}
-			continue
-		}
-		temp = append(temp, value)
-	}
-	if len(bodyString) == 1 {
-		// つまり <?php のみの場合
-		return nil
-	}
-	// 削除する行の指定が -1 の場合は最後の行を削除する
-	//fmt.Printf("%v", bodyString)
-	if row == -1 {
-		bodyString = bodyString[:len(bodyString)-1]
-	} else {
-		bodyString = append(bodyString[:row-1], bodyString[row:]...)
-	}
-	//fmt.Printf("%v", bodyString)
-	// 削除した結果の[]string変数が => bodyString に格納されている
-	os.Truncate(filePath, 0)
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		panic(err)
-	}
-	//bodyString = append(bodyString, "\n")
-	connectedBodyString := strings.Join(bodyString, "\n")
-	//fmt.Println("connectedBodyString: ", connectedBodyString)
-	_, err = file.WriteString(connectedBodyString)
-	if err != nil {
-		panic(err)
-	}
-	//fmt.Println("writtenSize: ", writtenSize)
-	file.WriteString("\n")
-	file.Close()
-	return nil
-}
-
-// deletePreviousCode 直前に入力したコードを削除する
-func deletePreviousCode(tokens []string, ngFile string, okFile string) int {
-	var previousLine = 0
-	{
-		var fileBuffer []string
-		file, err := os.Open(ngFile)
-		if err != nil {
-			panic(err)
-		}
-		scanner := bufio.NewScanner(file)
-		for scanner.Scan() {
-			{
-				fileBuffer = append(fileBuffer, scanner.Text())
-			}
-		}
-		// 削除したい対象の行数を取得する
-		var indexToDelete int
-		if hasIndex(tokens, 1) != true {
-			fmt.Println("削除したい行数を指定してください")
-			return -1
-		}
-		indexToDelete, err = strconv.Atoi(tokens[1])
-		if err != nil {
-			panic(err)
-		}
-
-		// 指定したindexがスライスの範囲内かどうかを検証
-		if (len(fileBuffer) > indexToDelete) != true {
-			fmt.Println("範囲外のindexが指定されました")
-			return -1
-		}
-		fileBuffer = append(fileBuffer[:indexToDelete], fileBuffer[indexToDelete+1:]...)
-		var closeError = file.Close()
-		if closeError != nil {
-			panic(closeError)
-		}
-
-		// validation用ファイルを空に
-		//file1.Close()
-		_ = os.Truncate(ngFile, 0)
-		file, err = os.OpenFile(ngFile, os.O_APPEND|os.O_WRONLY, 0777)
-		if err != nil {
-			panic(err)
-		}
-		_, _ = file.Seek(0, 0)
-		for _, value := range fileBuffer {
-			// 行末に改行文字を入力
-			_, err := file.WriteString(value + "\n")
-			if err != nil {
-				panic(err)
-			}
-		}
-		_ = file.Close()
-
-		_ = os.Truncate(okFile, 0)
-		file, err = os.OpenFile(okFile, os.O_APPEND|os.O_WRONLY, 0777)
-		if err != nil {
-			panic(err)
-		}
-		_, _ = file.Seek(0, 0)
-		for _, value := range fileBuffer {
-			// 行末に改行文字を入力
-			_, err := file.WriteString(value + "\n")
-			if err != nil {
-				panic(err)
-			}
-		}
-		_ = file.Close()
-
-		// 再度削除したphpファイルを実行して古いバッファを捨てる
-		command := exec.Command("php", okFile)
-		buffer, err := command.StdoutPipe()
-		if err != nil {
-			panic(err)
-		}
-		command.Start()
-		// 第三引数にfalseを与えて,実行結果の出力を破棄する
-		wiredrawing.LoadBuffer(buffer, &previousLine, false, false, config.Blue)
-		fmt.Println("")
-		return -1
-	}
-	// 正常に動作した最終のバイト数を返却する
-	return previousLine
 }
