@@ -9,6 +9,7 @@ import (
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/hymkor/go-multiline-ny"
 	"github.com/mattn/go-colorable"
+	"github.com/nyaosorg/go-readline-ny"
 	"github.com/nyaosorg/go-readline-ny/simplehistory"
 	"io"
 	"io/ioutil"
@@ -45,7 +46,7 @@ func InArray(needle string, haystack []string) bool {
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
 
-func StdInput(prompt string) string {
+func StdInput(prompt string, previousInput string) string {
 
 	ctx := context.Background()
 	//fmt.Println("C-m or Enter      : Insert a linefeed")
@@ -58,10 +59,18 @@ func StdInput(prompt string) string {
 	//fmt.Println("C-DOWN or M-N     : Move to the next history entry")
 
 	var ed multiline.Editor
+	var r readline.Coloring
+	ed.SetColoring(r)
 	ed.SetPrompt(func(w io.Writer, lnum int) (int, error) {
 		return fmt.Fprintf(w, "[%d] ", lnum+1)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
+		if len(lines) == 1 {
+			var f string = lines[0]
+			if (f == "exit") || (f == "cat") || f == "yes" || f == "rollback" {
+				return true
+			}
+		}
 		for number, value := range lines {
 			if (number == 0) && (value == "exit") {
 				return true
@@ -97,7 +106,13 @@ func StdInput(prompt string) string {
 		//fmt.Println(L)
 		//fmt.Println("-----")
 		history.Add(L)
-		return strings.Join(lines, "\n")
+		var stripLines []string
+		for _, value := range lines {
+			if strings.TrimSpace(value) != "" {
+				stripLines = append(stripLines, value)
+			}
+		}
+		return strings.Join(stripLines, "\n")
 	}
 
 	// 入力モードの選択用入力
@@ -487,7 +502,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	}
 	// エラー内容がシンタックスエラーなら許容する
 	if parseErrorRegex.MatchString(string(loadedByte)) {
-		pe.IsPermissibleError = true
+		pe.IsPermissibleError = false
 	}
 	// シンタックスエラーのみ許容するが Fatal Error in PHP である
 	pe.ErrorBuffer = loadedByte

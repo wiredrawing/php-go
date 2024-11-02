@@ -186,6 +186,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	helpMessages = append(helpMessages, fmt.Sprintf("errors:   過去のエラーを全て表示します."))
 	var helpMessage = strings.Join(helpMessages, "\n")
 
+	var rawInputText string = ""
 	for {
 		php.SetOkFile(okFile)
 		php.SetNgFile(ngFile)
@@ -196,7 +197,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			//fmt.Print(ColorWrapping("0", prompt))
 		}
 		// 両端のスペースを削除
-		rawInputText := wiredrawing.StdInput("")
+		rawInputText = wiredrawing.StdInput("", rawInputText)
 		//previousInputText = inputText
 		inputText = strings.TrimSpace(rawInputText)
 
@@ -267,7 +268,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			fmt.Println(ColorWrapping("31", "[PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。]"))
 			//fmt.Print(prompt)
 			// 両端のスペースを削除
-			var inputText = wiredrawing.StdInput(prompt)
+			var inputText = wiredrawing.StdInput(prompt, rawInputText)
 			inputText = strings.TrimSpace(inputText)
 			// 入力内容が空文字の場合コマンドラインを終了する
 			if len(inputText) == 0 {
