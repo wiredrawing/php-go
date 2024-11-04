@@ -9,7 +9,6 @@ import (
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/hymkor/go-multiline-ny"
 	"github.com/mattn/go-colorable"
-	"github.com/nyaosorg/go-readline-ny"
 	"github.com/nyaosorg/go-readline-ny/simplehistory"
 	"io"
 	"io/ioutil"
@@ -59,14 +58,23 @@ func StdInput(prompt string, previousInput string) string {
 	//fmt.Println("C-DOWN or M-N     : Move to the next history entry")
 
 	var ed multiline.Editor
-	var r readline.Coloring
-	ed.SetColoring(r)
+	if len(previousInput) != 0 && previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" {
+		splitPreviousInput := strings.Split(previousInput, "\n")
+		ed.SetDefault(splitPreviousInput)
+	}
 	ed.SetPrompt(func(w io.Writer, lnum int) (int, error) {
-		return fmt.Fprintf(w, "[%d] ", lnum+1)
+		return fmt.Fprintf(w, "\033[0m[%d]:>>> ", lnum+1)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
-		if len(lines) == 1 {
-			var f string = lines[0]
+		var replaceLines []string
+		for _, v := range lines {
+			if len(strings.TrimSpace(v)) == 0 {
+				continue
+			}
+			replaceLines = append(replaceLines, v)
+		}
+		if len(replaceLines) == 1 {
+			var f string = replaceLines[0]
 			if (f == "exit") || (f == "cat") || f == "yes" || f == "rollback" {
 				return true
 			}
@@ -96,6 +104,7 @@ func StdInput(prompt string, previousInput string) string {
 	ed.SetHistoryCycling(true)
 
 	for {
+		fmt.Println("\033[0m")
 		lines, err := ed.Read(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -154,7 +163,6 @@ func StdInput(prompt string, previousInput string) string {
 			s++
 			//fmt.Printf("k: %v, v: %v\n", key, key)
 		}
-		fmt.Print("\033[0m")
 		if len(readString) > 0 {
 			return strings.Join(readString, "\n")
 		}
@@ -350,6 +358,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	var outputSize int = 0
 	// whenError == true の場合バッファ内容を返却してやる
 	//var bufferWhenError string
+	fmt.Print("\033[0m")
 	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
 	//t := time.Now()
 	//formatted := t.Format(time.RFC3339)

@@ -360,6 +360,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				fmt.Print(ColorWrapping("0", ""))
 			}
 		}
+		rawInputText = ""
 		prompt = fmt.Sprintf(" %s ", inputPrompt)
 		continue
 	}
