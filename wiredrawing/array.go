@@ -85,7 +85,7 @@ func StdInput(prompt string, previousInput string) string {
 			}
 		}
 		if index >= 1 {
-			if (lines[index-1] == "") && (lines[index] == "") {
+			if lines[index] == "" {
 				return true
 			}
 		}
