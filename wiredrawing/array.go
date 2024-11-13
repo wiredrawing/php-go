@@ -9,6 +9,8 @@ import (
 	_ "github.com/glebarez/go-sqlite"
 	"github.com/hymkor/go-multiline-ny"
 	"github.com/mattn/go-colorable"
+	"github.com/nyaosorg/go-readline-ny"
+	"github.com/nyaosorg/go-readline-ny/keys"
 	"github.com/nyaosorg/go-readline-ny/simplehistory"
 	"io"
 	"io/ioutil"
@@ -58,6 +60,8 @@ func StdInput(prompt string, previousInput string) string {
 	//fmt.Println("C-DOWN or M-N     : Move to the next history entry")
 
 	var ed multiline.Editor
+	type ac = readline.AnonymousCommand
+	ed.BindKey(keys.Delete, ac(ed.CmdBackwardDeleteChar))
 	if len(previousInput) != 0 && previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" {
 		splitPreviousInput := strings.Split(previousInput, "\n")
 		ed.SetDefault(splitPreviousInput)
@@ -66,6 +70,7 @@ func StdInput(prompt string, previousInput string) string {
 		return fmt.Fprintf(w, "\033[0m[%d]:>>> ", lnum+1)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
+		// strip input text.
 		var replaceLines []string
 		for _, v := range lines {
 			if len(strings.TrimSpace(v)) == 0 {
@@ -73,6 +78,14 @@ func StdInput(prompt string, previousInput string) string {
 			}
 			replaceLines = append(replaceLines, v)
 		}
+		if len(replaceLines) == 0 {
+			return false
+		}
+		// 最後の行が<!>で終わっている場合はtrueを返却する
+		if (len(replaceLines) > 0) && replaceLines[len(replaceLines)-1] == "\\c" {
+			return true
+		}
+
 		if len(replaceLines) == 1 {
 			var f string = replaceLines[0]
 			if (f == "exit") || (f == "cat") || f == "yes" || f == "rollback" {
@@ -84,11 +97,11 @@ func StdInput(prompt string, previousInput string) string {
 				return true
 			}
 		}
-		if index >= 1 {
-			if lines[index] == "" {
-				return true
-			}
-		}
+		//if index >= 1 {
+		//	if lines[index] == "" {
+		//		return true
+		//	}
+		//}
 		return false
 
 		//fmt.Printf("lines: %v\n", lines)
@@ -104,19 +117,28 @@ func StdInput(prompt string, previousInput string) string {
 	ed.SetHistoryCycling(true)
 
 	for {
-		fmt.Println("\033[0m")
+		fmt.Print("\033[0m")
 		lines, err := ed.Read(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return strings.Join(lines, "")
 		}
-		L := strings.Join(lines, "\n")
+		var fixed []string
+		for _, value := range lines {
+			if len(value) > 0 {
+				fixed = append(fixed, value)
+			}
+		}
+		if fixed[len(fixed)-1] == "\\c" {
+			fixed = fixed[:len(fixed)-1]
+		}
+		L := strings.Join(fixed, "\n")
 		//fmt.Println("-----")
 		//fmt.Println(L)
 		//fmt.Println("-----")
 		history.Add(L)
 		var stripLines []string
-		for _, value := range lines {
+		for _, value := range fixed {
 			if strings.TrimSpace(value) != "" {
 				stripLines = append(stripLines, value)
 			}
