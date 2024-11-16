@@ -26,6 +26,10 @@ import (
 	"unsafe"
 )
 
+const (
+	AltEnter = "\x1B\r"
+)
+
 // InArray ------------------------------------------------
 // PHPのin_array関数をシミュレーション
 // 第二引数 haystackに第一引数 needleが含まれていれば
@@ -62,14 +66,17 @@ func StdInput(prompt string, previousInput string) string {
 	var ed multiline.Editor
 	type ac = readline.AnonymousCommand
 	ed.BindKey(keys.Delete, ac(ed.CmdBackwardDeleteChar))
+	ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar))
+	ed.BindKey(AltEnter, readline.AnonymousCommand(ed.Submit))
 	if len(previousInput) != 0 && previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" {
 		splitPreviousInput := strings.Split(previousInput, "\n")
 		ed.SetDefault(splitPreviousInput)
 	}
 	ed.SetPrompt(func(w io.Writer, lnum int) (int, error) {
-		return fmt.Fprintf(w, "\033[0m[%d]:>>> ", lnum+1)
+		return fmt.Fprintf(w, "\033[0m%d:>>> ", lnum+1)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
+		fmt.Print("\033[33m")
 		// strip input text.
 		var replaceLines []string
 		for _, v := range lines {
@@ -123,11 +130,18 @@ func StdInput(prompt string, previousInput string) string {
 			fmt.Fprintln(os.Stderr, err.Error())
 			return strings.Join(lines, "")
 		}
+		if len(lines) == 0 {
+			return ""
+		}
+
 		var fixed []string
 		for _, value := range lines {
 			if len(value) > 0 {
 				fixed = append(fixed, value)
 			}
+		}
+		if len(fixed) == 0 {
+			return ""
 		}
 		if fixed[len(fixed)-1] == "\\c" {
 			fixed = fixed[:len(fixed)-1]
@@ -398,7 +412,6 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 		// 正味のバッファを取り出す
 		readData = readData[:n]
 		//bufferWhenError += string(readData)
-
 		//// 実行結果としてSqliteに保存する
 		//pe.WriteResultToDB(string(readData))
 
