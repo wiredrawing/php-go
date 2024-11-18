@@ -252,7 +252,9 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			for index := range logs {
 				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
 				fmt.Print(ColorWrapping("34", indexStr) + ": ")
-				fmt.Println(ColorWrapping("32", (logs[index]["text"]).(string)))
+				var statement string = (logs[index]["text"]).(string)
+				var _ []string = strings.Split(statement, "\n")
+				fmt.Println(ColorWrapping("32", statement))
 			}
 			php.SetPreviousList(cl)
 			continue
