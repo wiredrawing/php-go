@@ -67,7 +67,10 @@ func StdInput(prompt string, previousInput string) string {
 	type ac = readline.AnonymousCommand
 	ed.BindKey(keys.Delete, ac(ed.CmdBackwardDeleteChar))
 	ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar))
+	ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar))
 	ed.BindKey(AltEnter, readline.AnonymousCommand(ed.Submit))
+	ed.BindKey(keys.CtrlBackslash, readline.AnonymousCommand(ed.Submit))
+	ed.BindKey(keys.CtrlZ, readline.AnonymousCommand(ed.Submit))
 	if len(previousInput) != 0 && previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" {
 		splitPreviousInput := strings.Split(previousInput, "\n")
 		ed.SetDefault(splitPreviousInput)
