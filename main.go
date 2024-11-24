@@ -4,23 +4,20 @@ package main
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
-	"github.com/joho/godotenv"
+	//"github.com/fsnotify/fsnotify"
 	//"golang.org/x/sys/windows"
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"phpgo/cmd"
 	"phpgo/config"
-	"phpgo/errorhandler"
-	"phpgo/wiredrawing"
+	//"phpgo/errorhandler"
+	//"phpgo/wiredrawing"
 	"phpgo/wiredrawing/inputter"
 	"phpgo/wiredrawing/parallel"
 	"runtime"
-	"strings"
+	//"strings"
 	"time"
 	// ここは独自パッケージ
 	//"golang.org/x/sys/windows"
@@ -80,113 +77,6 @@ func hash(filepath string) string {
 
 const DefaultSurveillanceFileName string = "-"
 
-func ExecuteSurveillanceFile(watcher *fsnotify.Watcher, filePathForSurveillance string, phpPath *string) {
-	// ファイル内容のハッシュ計算用に保持
-	//var previousHash []byte
-	//var hashedValue []byte
-	var hashedValue string
-	var previousHash string
-	// forループ外で宣言する
-	var php = wiredrawing.PhpExecuter{
-		PhpPath: *phpPath,
-	}
-	// 一時ファイルの作成
-	currentDir, _ := os.Getwd()
-	fmt.Printf("currentDir: %v\r\n", currentDir)
-	//// 過去に起動した一時ファイルを削除する
-	//
-	//globs, err := filepath.Glob(currentDir + "./PHP_GO_validation*")
-	//if err != nil {
-	//	panic(err)
-	//}
-	//for _, glob := range globs {
-	//	_ = os.Remove(glob)
-	//}
-
-	// ユーザーが入力したファイル
-	manualFp, err := os.OpenFile(filePathForSurveillance, os.O_CREATE|os.O_RDWR, 0777)
-	size, err := manualFp.Write([]byte("<?php\n"))
-	_ = manualFp.Close()
-	// エラーの場合は以下の関数内で終了するため、エラー処理は不要
-	errorhandler.ErrorHandler(err)
-	fmt.Printf("size: %v\r\n", size)
-	var previousExcecuteCode []string
-	for {
-		// php実行時の出力行数を保持
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Has(fsnotify.Write) && event.Name != filePathForSurveillance {
-				continue
-			}
-			hashedValue = hash(filePathForSurveillance)
-
-			if hashedValue == previousHash {
-				continue
-			}
-			// 古いハッシュを更新
-			previousHash = hashedValue
-			if len(previousExcecuteCode) > 0 {
-				nextExecutedCode, _ := wiredrawing.File(filePathForSurveillance)
-
-				for i := 0; i < len(previousExcecuteCode); i++ {
-					if (len(nextExecutedCode) - 1) < i {
-						php.SetPreviousList(0)
-						break
-					}
-					// スペースは削除して比較
-					p := strings.TrimSpace(previousExcecuteCode[i])
-					n := strings.TrimSpace(nextExecutedCode[i])
-					if p != n {
-						php.SetPreviousList(0)
-						break
-					}
-				}
-				previousExcecuteCode = nextExecutedCode
-			} else {
-				previousExcecuteCode, _ = wiredrawing.File(filePathForSurveillance)
-			}
-			php.SetOkFile(filePathForSurveillance)
-			php.SetNgFile(filePathForSurveillance)
-			// 致命的なエラー
-			isFatal, err := php.DetectFatalError()
-			if isFatal == true {
-				// 致命的なエラーの場合
-				// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-				fmt.Println("[Fatal Error]")
-				fmt.Println(inputter.ColorWrapping("31", string(php.ErrorBuffer)))
-				continue
-			} else {
-				if len(php.ErrorBuffer) > 0 {
-					// 非Fatal Error
-					fmt.Println("[None Fatal Error]")
-					fmt.Println(inputter.ColorWrapping("33", string(php.ErrorBuffer)))
-					continue
-				}
-			}
-			if bytes, err := php.DetectErrorExceptFatalError(); (err != nil) || len(bytes) > 0 {
-				fmt.Println(inputter.ColorWrapping("31", string(bytes)))
-				continue
-			}
-			//fmt.Println(" >>> ")
-			size, err := php.Execute(true)
-			if err != nil {
-				panic(err)
-			}
-			if size > 0 {
-				fmt.Println("")
-			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Println("error:", err)
-		}
-	}
-}
-
 func stringp(s string) *string {
 	return &s
 }
@@ -194,17 +84,6 @@ func stringp(s string) *string {
 func main() {
 	var _ bool
 	var err error
-	// surveillanceモードの場合に常時開くエディタを指定する
-	// デフォルトは .env ファイルを探索する
-	err = godotenv.Load()
-	if err != nil {
-		fmt.Println(inputter.ColorWrapping(config.Red, "環境変数がロードできません。ターミナルのみ起動します。"))
-	}
-	err = godotenv.Load(".phpgo")
-	if err != nil {
-		fmt.Println(inputter.ColorWrapping(config.Red, "環境変数がロードできません。ターミナルのみ起動します。"))
-	}
-	var editorPath = os.Getenv("EDITOR_PATH")
 
 	commandLineOption := cmd.Execute()
 
@@ -213,10 +92,10 @@ func main() {
 	}
 	// コマンドライン引数を取得
 	var phpPath *string = stringp(commandLineOption.Phppath)
-	var surveillanceFile *string = stringp(commandLineOption.Surveillance)
+	_ = stringp(commandLineOption.Surveillance)
 	var prompt *string = stringp(commandLineOption.Prompt)
 	var saveFileName *string = stringp(commandLineOption.SaveFileName)
-	var editorPathFromCommandLineOption *string = stringp(commandLineOption.EditorPath)
+	_ = stringp(commandLineOption.EditorPath)
 
 	// phpの実行パスを設定
 	if *phpPath == "-" {
@@ -226,54 +105,6 @@ func main() {
 
 	// 割り込み監視用
 	var signalChan = make(chan os.Signal)
-
-	if *surveillanceFile != DefaultSurveillanceFileName && *surveillanceFile != "" {
-		// 事前に過去に作成された一時ファイルを削除する
-		tdir, err := os.MkdirTemp("", "phpgo")
-		fmt.Printf("tdir: %v\r\n", tdir)
-		if err != nil {
-			panic(err)
-		}
-		targetPath := filepath.Join(tdir, *surveillanceFile+".php")
-		tempF, err := os.Create(targetPath)
-		if err != nil {
-			panic(err)
-		}
-		var filePathForSurveillance string = tempF.Name()
-		_ = tempF.Close()
-		// Create new watcher.
-		watcher, err := fsnotify.NewWatcher()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		defer func(watcher *fsnotify.Watcher) {
-			err := watcher.Close()
-			if err != nil {
-				log.Fatal(err)
-			}
-		}(watcher)
-
-		// 指定されたエディタパスでファイルを開く
-		// もしエディタパスが指定されていなければスルーする
-		fmt.Printf("editorPathfromCommandLineOption: %v\r\n", *editorPathFromCommandLineOption)
-		if len(editorPath) > 0 {
-			err = exec.Command(editorPath, filePathForSurveillance).Start()
-			if (err != nil) && (err.Error() != "exit status 1") {
-				panic(err)
-			}
-		} else if len(*editorPathFromCommandLineOption) > 0 {
-			err = exec.Command(*editorPathFromCommandLineOption, filePathForSurveillance).Start()
-			if (err != nil) && (err.Error() != "exit status 1") {
-				panic(err)
-			}
-		}
-		// Start listening for events.
-		go ExecuteSurveillanceFile(watcher, filePathForSurveillance, phpPath)
-		if err := watcher.Add(tdir); err != nil {
-			log.Fatal(err)
-		}
-	}
 
 	// コンソールの監視
 	signal.Notify(
@@ -314,7 +145,7 @@ func main() {
 			if code == 1 {
 				os.Exit(code)
 			} else if code == 4 {
-				fmt.Printf(inputter.ColorWrapping(config.Yellow, "Please input the word 'exit' to exit the program.\r\n"))
+				fmt.Printf(config.ColorWrapping(config.Yellow, "Please input the word 'exit' to exit the program.\r\n"))
 				//fmt.Print("[Ignored interrupt].\r\n")
 			} else {
 				if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
@@ -324,7 +155,7 @@ func main() {
 			fmt.Printf("code: %v\r\n", code)
 		}
 	}(exit)
-	// ----------------------------------------------
+	// ----------------------------------了する場合はもう一度 ctrl+C を押して下さ------------
 	// 標準入力を可能にする
 	// 標準入力の開始
 	// ----------------------------------------------
@@ -339,7 +170,7 @@ func main() {
 			}
 		}
 	}()
-	fmt.Println(inputter.ColorWrapping(config.Green, "[The applicaiton was just started.]"))
+	//fmt.Println(inputter.ColorWrapping(config.Green, "[The applicaiton was just started.]"))
 	_, err = inputter.StandByInput(*phpPath, *prompt, *saveFileName)
 	if err != nil {
 		panic(err)

@@ -1,7 +1,6 @@
 package inputter
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -28,30 +27,6 @@ func makeDirectory(dir string) bool {
 		}
 	}
 	return true
-}
-
-func concatenate(fileName string) []string {
-	catFile, err := os.Open(fileName)
-	if err != nil {
-		panic(err)
-	}
-	tempScanner := bufio.NewScanner(catFile)
-
-	var index = 0
-	var indexStr = ""
-	fmt.Println("")
-	var outputList []string = make([]string, 0, 100)
-	var t string = ""
-	for tempScanner.Scan() {
-		indexStr = fmt.Sprintf("%03d", index)
-		fmt.Print(ColorWrapping("34", indexStr) + ": ")
-		t = tempScanner.Text()
-		outputList = append(outputList, t)
-		fmt.Println(ColorWrapping("32", t))
-		index++
-	}
-	fmt.Println("")
-	return outputList
 }
 
 // ----------------------------------------------//
@@ -128,23 +103,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	var ngFile = ".validation.dat"
 	var okFile = ".success.dat"
 
-	//dname, _ := os.MkdirTemp("", "phpgo_")
-	////fmt.Printf("tempDir: %v\r\n", dname)
-	//ngTempF, err := os.CreateTemp(dname, "ngFile.dat")
-	//if err != nil {
-	//	panic(err)
-	//}
-	//okTempF, err := os.CreateTemp(dname, "okFile.dat")
-	//if err != nil {
-	//	panic(err)
-	//}
-	//
-	//ngFile = ngTempF.Name()
-	//ngTempF.Close()
-	//okFile = okTempF.Name()
-	//okTempF.Close()
-	//filePathForError = dotDir + "\\" + filePathForError
-
 	// OSの一時ファイル作成に任せる
 	okFileTemp, err := os.CreateTemp("", ".success.dat.")
 	if err != nil {
@@ -192,13 +150,19 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		php.SetNgFile(ngFile)
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
-			fmt.Print(ColorWrapping("33", prompt))
+			fmt.Print(config.ColorWrapping("33", prompt))
 		} else {
-			//fmt.Print(ColorWrapping("0", prompt))
+			//fmt.Print(config.ColorWrapping("0", prompt))
 		}
 		// 両端のスペースを削除
-		rawInputText = wiredrawing.StdInput("", rawInputText)
-		//previousInputText = inputText
+		var isExit int
+		rawInputText, isExit = wiredrawing.StdInput("", inputText)
+		if isExit == 1 {
+			continue
+		} else if isExit == 2 {
+			break
+		}
+
 		inputText = strings.TrimSpace(rawInputText)
 
 		if len(inputText) == 0 {
@@ -207,31 +171,19 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		}
 
 		if inputText == "help" {
-			fmt.Println(ColorWrapping("33", helpMessage))
+			fmt.Println(config.ColorWrapping("33", helpMessage))
 			continue
-		}
-
-		if inputText == "errors" {
+		} else if inputText == "error" {
 			var wholeErrors = php.WholeErrors()
 			for key, value := range wholeErrors {
-				fmt.Print(ColorWrapping(config.Green, fmt.Sprintf("[%03d] => ", key+1)))
-				fmt.Print(ColorWrapping(config.Red, value))
+				fmt.Print(config.ColorWrapping(config.Green, fmt.Sprintf("[%03d] => ", key+1)))
+				fmt.Print(config.ColorWrapping(config.Red, value))
 			}
 			continue
-		}
-		if inputText == "reset errors" {
+		} else if inputText == "reset errors" {
 			php.ResetWholeErrors()
 			continue
-		}
-		if inputText == "rollback" {
-			//lines, err := wiredrawing.File(ngFile)
-			//if err != nil {
-			//	panic(err)
-			//}
-			//if len(lines) == 1 {
-			//	continue
-			//}
-			//_ = popStirngToFile(ngFile, -1)
+		} else if inputText == "rollback" {
 			php.Rollback()
 			isFatal, _ := php.DetectFatalError()
 			errorBuffer := php.ErrorBuffer
@@ -251,10 +203,10 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			logs := php.Cat()
 			for index := range logs {
 				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
-				fmt.Print(ColorWrapping("34", indexStr) + ": ")
+				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
 				var statement string = (logs[index]["text"]).(string)
 				var _ []string = strings.Split(statement, "\n")
-				fmt.Println(ColorWrapping("32", statement))
+				fmt.Println(config.ColorWrapping("32", statement))
 			}
 			php.SetPreviousList(cl)
 			continue
@@ -267,14 +219,15 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		if inputText == "exit" {
 			// コンソールを終了するための標準入力を取得する
 
-			fmt.Println(ColorWrapping("31", "[PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。]"))
+			fmt.Println(config.ColorWrapping("31", "[PHPコマンドラインを終了します。本当に終了する場合は<yes>と入力して下さい。]"))
 			//fmt.Print(prompt)
 			// 両端のスペースを削除
-			var inputText = wiredrawing.StdInput(prompt, rawInputText)
+			rawInputText = ""
+			var inputText, _ = wiredrawing.StdInput(prompt, rawInputText)
 			inputText = strings.TrimSpace(inputText)
 			// 入力内容が空文字の場合コマンドラインを終了する
 			if len(inputText) == 0 {
-				fmt.Println(ColorWrapping("31", "キャンセルしました。"))
+				fmt.Println(config.ColorWrapping("31", "キャンセルしました。"))
 				continue
 			}
 
@@ -282,7 +235,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				// 終了メッセージを表示
 				// string型を[]byteに変換して書き込み
 				var messageToEnd = []byte("Thank you for using me! Good by.")
-				_, err := os.Stdout.Write([]byte(ColorWrapping("34", string(messageToEnd))))
+				_, err := os.Stdout.Write([]byte(config.ColorWrapping("34", string(messageToEnd))))
 				os.Stdout.Write([]byte("\n\n"))
 				if err != nil {
 					return false, err
@@ -312,8 +265,8 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			logs := php.Cat()
 			for index := range logs {
 				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
-				fmt.Print(ColorWrapping("34", indexStr) + ": ")
-				fmt.Println(ColorWrapping("32", (logs[index]["text"]).(string)))
+				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
+				fmt.Println(config.ColorWrapping("32", (logs[index]["text"]).(string)))
 			}
 			//concatenate(ngFile)
 			continue
@@ -337,7 +290,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 					prompt = " ... "
 				} else {
 					// Fatal Errorが検出された場合はエラーメッセージを表示して終了
-					fmt.Println(ColorWrapping("31", string(errorBuffer)))
+					fmt.Println(config.ColorWrapping("31", string(errorBuffer)))
 					// 事前検証用のfileの中身を本実行用fileの中身と同じにする
 					php.Rollback()
 				}
@@ -345,7 +298,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			}
 		} else if (isFatal == false) && len(php.ErrorBuffer) > 0 {
 			// Fatal Error ではないがErrorBufferが空ではない場合
-			fmt.Println(ColorWrapping("33", string(php.ErrorBuffer)))
+			fmt.Println(config.ColorWrapping("33", string(php.ErrorBuffer)))
 			// 事前検証用のfileの中身を本実行用fileの中身と同じにする
 			php.Rollback()
 			continue
@@ -354,23 +307,19 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		//_, _ = php.CopyFromNgToOk()
 
 		if outputSize, err := php.Execute(true); err != nil {
-			fmt.Println(ColorWrapping("31", err.Error()))
+			fmt.Println(config.ColorWrapping("31", err.Error()))
 		} else {
 			if outputSize > 0 {
-				fmt.Print(ColorWrapping("0", "\n"))
+				fmt.Print(config.ColorWrapping("0", "\n"))
 			} else {
-				fmt.Print(ColorWrapping("0", ""))
+				fmt.Print(config.ColorWrapping("0", ""))
 			}
 		}
-		rawInputText = ""
+		inputText = ""
 		prompt = fmt.Sprintf(" %s ", inputPrompt)
 		continue
 	}
 	// 標準入力の終了
 
 	return true, nil
-}
-
-func ColorWrapping(colorCode string, text string) string {
-	return "\033[" + colorCode + "m" + text + "\033[0m"
 }

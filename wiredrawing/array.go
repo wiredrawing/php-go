@@ -1,8 +1,8 @@
 package wiredrawing
 
 import (
-	"bufio"
 	"context"
+	"crypto/sha512"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -15,20 +15,53 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
 	"phpgo/config"
+	. "phpgo/errorhandler"
 	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"time"
 	"unsafe"
 )
 
 const (
 	AltEnter = "\x1B\r"
 )
+
+type PHPSource struct {
+	text     string
+	sourceId int
+}
+type MyBinder struct {
+	ctrlCNum int
+	prompt   int
+}
+
+func (my *MyBinder) SetPrompt(prompt int) {
+	my.prompt = prompt
+}
+func (my *MyBinder) Prompt() int {
+	return my.prompt
+}
+func (my *MyBinder) Call(ctx context.Context, b *readline.Buffer) readline.Result {
+	if my.prompt > 0 {
+		my.prompt += 1
+		return readline.ENTER
+	} else {
+		my.prompt = 1
+		fmt.Println(config.ColorWrapping(config.Red, "終了する場合はもう一度 ctrl+C を押して下さい"))
+		return readline.ENTER
+	}
+}
+func (my *MyBinder) String() string {
+	return "MyBinder"
+
+}
 
 // InArray ------------------------------------------------
 // PHPのin_array関数をシミュレーション
@@ -47,33 +80,35 @@ func InArray(needle string, haystack []string) bool {
 	return false
 }
 
+var myBinder *MyBinder = &MyBinder{
+	ctrlCNum: 0,
+	prompt:   0,
+}
+var ed multiline.Editor
+
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
 
-func StdInput(prompt string, previousInput string) string {
+func StdInput(prompt string, previousInput string) (string, int) {
 
 	ctx := context.Background()
-	//fmt.Println("C-m or Enter      : Insert a linefeed")
-	//fmt.Println("C-p or UP         : Move to the previous line.")
-	//fmt.Println("C-n or DOWN       : Move to the next line")
-	//fmt.Println("C-j               : Submit")
-	//fmt.Println("C-c               : Abort.")
-	//fmt.Println("C-D with no chars : Quit.")
-	//fmt.Println("C-UP   or M-P     : Move to the previous history entry")
-	//fmt.Println("C-DOWN or M-N     : Move to the next history entry")
-
-	var ed multiline.Editor
 	type ac = readline.AnonymousCommand
-	ed.BindKey(keys.Delete, ac(ed.CmdBackwardDeleteChar))
-	ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar))
-	ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar))
-	ed.BindKey(AltEnter, readline.AnonymousCommand(ed.Submit))
-	ed.BindKey(keys.CtrlBackslash, readline.AnonymousCommand(ed.Submit))
-	ed.BindKey(keys.CtrlZ, readline.AnonymousCommand(ed.Submit))
-	if len(previousInput) != 0 && previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" {
-		splitPreviousInput := strings.Split(previousInput, "\n")
-		ed.SetDefault(splitPreviousInput)
+
+	Catch(ed.BindKey(keys.Delete, ac(ed.CmdBackwardDeleteChar)))
+	Catch(ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar)))
+	Catch(ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar)))
+	Catch(ed.BindKey(AltEnter, readline.AnonymousCommand(ed.Submit)))
+	Catch(ed.BindKey(keys.CtrlBackslash, readline.AnonymousCommand(ed.Submit)))
+	Catch(ed.BindKey(keys.CtrlZ, readline.AnonymousCommand(ed.Submit)))
+	//ed.BindKey(keys.CtrlC, myBinder)
+	if len(previousInput) > 0 {
+		if previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" && previousInput != "save" {
+			splitPreviousInput := strings.Split(previousInput, "\n")
+			ed.SetDefault(splitPreviousInput)
+		}
+	} else {
+		ed.SetDefault(nil)
 	}
 	ed.SetPrompt(func(w io.Writer, lnum int) (int, error) {
 		return fmt.Fprintf(w, "\033[0m%d:>>> ", lnum+1)
@@ -83,22 +118,23 @@ func StdInput(prompt string, previousInput string) string {
 		// strip input text.
 		var replaceLines []string
 		for _, v := range lines {
-			if len(strings.TrimSpace(v)) == 0 {
+			stripV := strings.TrimSpace(v)
+			if len(stripV) == 0 {
 				continue
 			}
-			replaceLines = append(replaceLines, v)
+			replaceLines = append(replaceLines, stripV)
 		}
 		if len(replaceLines) == 0 {
 			return false
 		}
-		// 最後の行が<!>で終わっている場合はtrueを返却する
+		// 最後の行が<\c>で終わっている場合はtrueを返却する
 		if (len(replaceLines) > 0) && replaceLines[len(replaceLines)-1] == "\\c" {
 			return true
 		}
 
 		if len(replaceLines) == 1 {
 			var f string = replaceLines[0]
-			if (f == "exit") || (f == "cat") || f == "yes" || f == "rollback" {
+			if (f == "exit") || (f == "cat") || f == "yes" || f == "rollback" || f == "save" {
 				return true
 			}
 		}
@@ -107,11 +143,12 @@ func StdInput(prompt string, previousInput string) string {
 				return true
 			}
 		}
-		//if index >= 1 {
-		//	if lines[index] == "" {
-		//		return true
-		//	}
-		//}
+		connected := strings.Join(replaceLines, "")
+		// 入力内容の末尾が_(アンダースコア)で完了している場合はtrueを返却
+		if strings.HasSuffix(connected, "_") {
+			return true
+		}
+
 		return false
 
 		//fmt.Printf("lines: %v\n", lines)
@@ -131,10 +168,10 @@ func StdInput(prompt string, previousInput string) string {
 		lines, err := ed.Read(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
-			return strings.Join(lines, "")
+			return strings.Join(lines, ""), myBinder.Prompt()
 		}
 		if len(lines) == 0 {
-			return ""
+			return "", myBinder.Prompt()
 		}
 
 		var fixed []string
@@ -144,7 +181,7 @@ func StdInput(prompt string, previousInput string) string {
 			}
 		}
 		if len(fixed) == 0 {
-			return ""
+			return "", myBinder.Prompt()
 		}
 		if fixed[len(fixed)-1] == "\\c" {
 			fixed = fixed[:len(fixed)-1]
@@ -160,57 +197,12 @@ func StdInput(prompt string, previousInput string) string {
 				stripLines = append(stripLines, value)
 			}
 		}
-		return strings.Join(stripLines, "\n")
-	}
-
-	// 入力モードの選択用入力
-	var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
-	var result bool = scanner.Scan()
-	if result != true {
-		return ""
-	}
-	var which string = scanner.Text()
-	if which != ">>>" {
-		return which
-	}
-	fmt.Print("\033[33m")
-	{
-		var scanner *bufio.Scanner = bufio.NewScanner(os.Stdin)
-		var readString []string
-		var s = 0
-		for {
-			//if s > 0 {
-			//	fmt.Printf("%s%s", " ... ", " ... ")
-			//} else {
-			//	fmt.Printf("%s%s", " ... ", " >>> ")
-			//}
-			scanner.Scan()
-			value := scanner.Text()
-
-			//if value == "rollback" {
-			//	if len(readString) > 0 {
-			//		var lastString string = readString[len(readString)-1]
-			//		readString = readString[0 : len(readString)-1]
-			//		fmt.Print("\v" + colorWrapping("31", lastString) + "\n")
-			//		continue
-			//	}
-			//}
-			if value == "" {
-				break
-			}
-			readString = append(readString, value)
-			s++
-			//fmt.Printf("k: %v, v: %v\n", key, key)
+		result := strings.Join(stripLines, "\n")
+		if strings.HasSuffix(result, "_") {
+			result = result[:len(result)-1]
 		}
-		if len(readString) > 0 {
-			return strings.Join(readString, "\n")
-		}
-		return ""
+		return result, myBinder.Prompt()
 	}
-}
-
-func colorWrapping(colorCode string, text string) string {
-	return "\033[" + colorCode + "m" + text + "\033[0m"
 }
 
 type PhpExecuter struct {
@@ -230,6 +222,7 @@ type PhpExecuter struct {
 	wholeErrors  []string
 	db           *sql.DB
 	DatabasePath string
+	hashKey      string
 }
 
 func (p *PhpExecuter) nextId() int {
@@ -263,7 +256,23 @@ func (p *PhpExecuter) currentId() int {
 	}
 	return currentId
 }
+
+func (p *PhpExecuter) makeHashKey() string {
+	var today time.Time = time.Now()
+	// 保存用のハッシュを作詞絵
+	rand.Seed(today.Unix())
+	var source []byte = make([]byte, 256)
+	for i := 0; i < 256; i++ {
+		source[i] = byte(rand.Intn(255))
+	}
+	first := sha512.New()
+	first.Write(source)
+	hashKey := fmt.Sprintf("%x", first.Sum(nil))
+	return hashKey
+}
 func (p *PhpExecuter) InitDB() *sql.DB {
+
+	p.hashKey = p.makeHashKey()
 	// sqliteの初期化R
 	path, err := os.UserHomeDir()
 	if err != nil {
@@ -287,9 +296,20 @@ func (p *PhpExecuter) InitDB() *sql.DB {
 	    is_production int
 	)`
 	_, err = db.Exec(createSql)
-	if err != nil {
-		panic(err)
-	}
+	Catch(err)
+
+	backUpTable := `
+		create table backup_phptext(
+		    id integer not null primary key  autoincrement,
+		    phptext_id integer not null,
+		    text text not null,
+		    created_at datetime not null DEFAULT (DATETIME('now', 'localtime')),
+		    key text not null
+		)
+	`
+	_, err = db.Exec(backUpTable)
+	Catch(err)
+
 	// 実行結果を格納するテーブルを作成
 	var sql string = `
 		create table results (
@@ -311,18 +331,18 @@ func (p *PhpExecuter) InitDB() *sql.DB {
 }
 
 // WholeErrors ----------------------------------------
-func (pe *PhpExecuter) WholeErrors() []string {
-	return pe.wholeErrors
+func (p *PhpExecuter) WholeErrors() []string {
+	return p.wholeErrors
 }
 
 // ResetWholeErrors ----------------------------------------
 // 溜まったエラーメッセージをリセットする
-func (pe *PhpExecuter) ResetWholeErrors() {
-	pe.wholeErrors = []string{}
+func (p *PhpExecuter) ResetWholeErrors() {
+	p.wholeErrors = []string{}
 }
 
-func (pe *PhpExecuter) Cat() []map[string]interface{} {
-	db := pe.db
+func (p *PhpExecuter) Cat() []map[string]interface{} {
+	db := p.db
 	query, err := db.Query("select id, text from phptext order by id asc")
 	if err != nil {
 		log.Fatal(err)
@@ -346,29 +366,29 @@ func (pe *PhpExecuter) Cat() []map[string]interface{} {
 
 // SetPreviousList ----------------------------------------
 // 前回のセーブポイントを変更する
-func (pe *PhpExecuter) SetPreviousList(number int) int {
-	var currenetLine int = pe.previousLine
-	pe.previousLine = number
+func (p *PhpExecuter) SetPreviousList(number int) int {
+	var currenetLine int = p.previousLine
+	p.previousLine = number
 	return currenetLine
 }
-func (pe *PhpExecuter) GetPreviousList() int {
-	var currenetLine int = pe.previousLine
+func (p *PhpExecuter) GetPreviousList() int {
+	var currenetLine int = p.previousLine
 	return currenetLine
 }
-func (pe *PhpExecuter) SetPhpExcutePath(phpPath string) {
+func (p *PhpExecuter) SetPhpExcutePath(phpPath string) {
 	if phpPath == "" {
-		pe.PhpPath = "php"
+		p.PhpPath = "php"
 	}
-	pe.PhpPath = phpPath
+	p.PhpPath = phpPath
 }
 
-func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
-	logs := pe.Cat()
+func (p *PhpExecuter) Execute(showBuffer bool) (int, error) {
+	logs := p.Cat()
 	phpLogs := ""
 	for index := range logs {
 		phpLogs += logs[index]["text"].(string) + "\n"
 	}
-	fp, _ := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
+	fp, _ := os.OpenFile(p.okFile, os.O_RDWR, 0777)
 	fp.Truncate(0)
 	fp.Seek(0, 0)
 	fp.WriteString(phpLogs)
@@ -379,7 +399,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	//	log.Fatal(err)
 	//}
 	// isValidate == true の場合はngFileを実行(事前実行)
-	command := exec.Command(pe.PhpPath, fp.Name())
+	command := exec.Command(p.PhpPath, fp.Name())
 
 	buffer, err := command.StdoutPipe()
 	if err != nil {
@@ -420,9 +440,9 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 
 		from := currentLine
 		to := currentLine + n
-		if (currentLine + n) >= pe.previousLine {
-			if from < pe.previousLine && pe.previousLine <= to {
-				diff := pe.previousLine - currentLine
+		if (currentLine + n) >= p.previousLine {
+			if from < p.previousLine && p.previousLine <= to {
+				diff := p.previousLine - currentLine
 				tempSlice := readData[diff:]
 				// 出力内容の表示フラグがtrueの場合のみ
 				outputSize += len(tempSlice)
@@ -446,7 +466,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 		currentLine += n
 		readData = nil
 	}
-	pe.previousLine = currentLine
+	p.previousLine = currentLine
 	_ = command.Wait()
 	// 使用したメモリを開放してみる
 	runtime.GC()
@@ -454,7 +474,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 	// コンソールのカラーをもとにもどす
 	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
-	pe.ErrorBuffer = []byte{}
+	p.ErrorBuffer = []byte{}
 	//// 再度新規pointerとしてokFileFpを開く
 	//pe.okFileFp, err = os.OpenFile(pe.okFile, os.O_RDWR, 0777)
 	return outputSize, nil
@@ -462,7 +482,7 @@ func (pe *PhpExecuter) Execute(showBuffer bool) (int, error) {
 
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
-func (pe *PhpExecuter) DetectFatalError() (bool, error) {
+func (p *PhpExecuter) DetectFatalError() (bool, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -479,7 +499,7 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	//const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?syntax[ ]+?error`
 	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
-	pe.IsPermissibleError = false
+	p.IsPermissibleError = false
 
 	//// 事前にPHPコマンド <php -l file-name>でシンタックスエラーのみを先にチェックする
 	//syntax := exec.Command(pe.PhpPath, "-l", pe.ngFile)
@@ -503,17 +523,17 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 	//	return true, nil
 	//}
 
-	logs := pe.Cat()
+	logs := p.Cat()
 	phpLogs := ""
 	for index := range logs {
 		phpLogs += logs[index]["text"].(string) + "\n"
 	}
-	fp, _ := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
+	fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
 	fp.Truncate(0)
 	fp.Seek(0, 0)
 	fp.WriteString(phpLogs)
 	// 終了コードが不正な場合,FatalErrorを取得する
-	c := exec.Command(pe.PhpPath, fp.Name())
+	c := exec.Command(p.PhpPath, fp.Name())
 	buffer, err := c.StderrPipe()
 	if err != nil {
 		fmt.Printf("err in DetectFatalError: %v\n", err)
@@ -538,27 +558,27 @@ func (pe *PhpExecuter) DetectFatalError() (bool, error) {
 		if len(loadedByte) > 0 {
 			// Fatal Error in PHP ではない
 			// また標準エラー出力はオブジェクトから取得する
-			pe.ErrorBuffer = loadedByte
-			pe.wholeErrors = append(pe.wholeErrors, string(loadedByte))
+			p.ErrorBuffer = loadedByte
+			p.wholeErrors = append(p.wholeErrors, string(loadedByte))
 			return false, nil
 			//return loadedByte, false, nil
 		}
 		// 終了コードが正常な場合,何もしない
-		pe.ErrorBuffer = []byte{}
+		p.ErrorBuffer = []byte{}
 		return false, nil
 	}
 	// エラー内容がシンタックスエラーなら許容する
 	if parseErrorRegex.MatchString(string(loadedByte)) {
-		pe.IsPermissibleError = false
+		p.IsPermissibleError = false
 	}
 	// シンタックスエラーのみ許容するが Fatal Error in PHP である
-	pe.ErrorBuffer = loadedByte
-	pe.wholeErrors = append(pe.wholeErrors, string(loadedByte))
+	p.ErrorBuffer = loadedByte
+	p.wholeErrors = append(p.wholeErrors, string(loadedByte))
 	return true, nil
 }
 
-func (pe *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
-	c := exec.Command(pe.PhpPath, pe.ngFile)
+func (p *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
+	c := exec.Command(p.PhpPath, p.ngFile)
 	buffer, err := c.StderrPipe()
 	if err != nil {
 		return []byte{}, err
@@ -569,8 +589,8 @@ func (pe *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
 	return loadedByte, nil
 }
 
-func (pe *PhpExecuter) GetFatalError() []byte {
-	c := exec.Command(pe.PhpPath, pe.ngFile)
+func (p *PhpExecuter) GetFatalError() []byte {
+	c := exec.Command(p.PhpPath, p.ngFile)
 	if buffer, err := c.StderrPipe(); err != nil {
 		panic(err)
 	} else {
@@ -584,11 +604,11 @@ func (pe *PhpExecuter) GetFatalError() []byte {
 	}
 }
 
-func (pe *PhpExecuter) SetOkFile(okFile string) {
-	if pe.okFile == "" {
-		pe.okFile = okFile
+func (p *PhpExecuter) SetOkFile(okFile string) {
+	if p.okFile == "" {
+		p.okFile = okFile
 	}
-	if pe.okFileFp == nil {
+	if p.okFileFp == nil {
 		//fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
 		//if err != nil {
 		//	log.Fatal(err)
@@ -603,11 +623,11 @@ func (pe *PhpExecuter) SetOkFile(okFile string) {
 		//pe.okFileFp = fp
 	}
 }
-func (pe *PhpExecuter) SetNgFile(ngFile string) {
-	if pe.ngFile == "" {
-		pe.ngFile = ngFile
+func (p *PhpExecuter) SetNgFile(ngFile string) {
+	if p.ngFile == "" {
+		p.ngFile = ngFile
 	}
-	if pe.ngFileFp == nil {
+	if p.ngFileFp == nil {
 		//fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
 		//if err != nil {
 		//	log.Fatal(err)
@@ -651,9 +671,9 @@ func (p *PhpExecuter) WriteResultToDB(result string) bool {
 }
 
 // WriteToDB 指定したテキストをSqliteに書き込む
-func (pe *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
+func (p *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	// sqliteへ書き込む
-	tx, _ := pe.db.Begin()
+	tx, _ := p.db.Begin()
 	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
 	if err != nil {
 		panic(err)
@@ -664,7 +684,7 @@ func (pe *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	}
 	// 取得したnextID, 本文, 実行するタイミング
 	cleansing := strings.TrimRight(input, "\r\n ")
-	result, _ := st.Exec(pe.nextId(), cleansing, isProduction)
+	result, _ := st.Exec(p.nextId(), cleansing, isProduction)
 	latestId, err := result.LastInsertId()
 	err = tx.Commit()
 	if err != nil {
@@ -673,7 +693,7 @@ func (pe *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	return latestId
 }
 
-func (pe *PhpExecuter) WriteToNg(input string) int64 {
+func (p *PhpExecuter) WriteToNg(input string) int64 {
 	//var err error = nil
 	//// ngFileのポインタを末尾に移動させる
 	//_, _ = io.ReadAll(pe.ngFileFp)
@@ -681,11 +701,40 @@ func (pe *PhpExecuter) WriteToNg(input string) int64 {
 	//if err != nil {
 	//	log.Fatal(err)
 	//}
-	latestId := pe.WriteToDB(input, 0)
+	latestId := p.WriteToDB(input, 0)
 	return latestId
 }
 
-func (pe *PhpExecuter) Save(saveFileName string) bool {
+func (p *PhpExecuter) Save(saveFileName string) bool {
+	current := make([]PHPSource, 0, 64)
+	sql := `
+		select id, text from phptext order by id asc
+		`
+	tx, err := p.db.Begin()
+	Catch(err)
+	rows, err := tx.Query(sql)
+	Catch(err)
+	var sourceText string = ""
+	var sourceId int = 0
+	currentConnected := ""
+	for rows.Next() {
+		Catch(rows.Scan(&sourceId, &sourceText))
+		fmt.Printf("sourceText => %v", sourceText)
+		currentConnected += sourceText + "\n"
+		current = append(current, PHPSource{text: sourceText, sourceId: sourceId})
+	}
+
+	fmt.Printf("current => %v", current)
+	// 保存のたびにハッシュキーを計算
+	p.hashKey = p.makeHashKey()
+	for _, row := range current {
+		sql := "insert into backup_phptext (phptext_id, text, key) values(? ,?, ?)"
+		statement, err := tx.Prepare(sql)
+		Catch(err)
+		_, err = statement.Exec(row.sourceId, row.text, p.hashKey)
+		Catch(err)
+	}
+	Catch(tx.Commit())
 	// バックアップ用ファイルを作成する
 	wd, _ := os.Getwd()
 	if saveFileName == "" {
@@ -693,16 +742,16 @@ func (pe *PhpExecuter) Save(saveFileName string) bool {
 	} else {
 		saveFileName = wd + "/" + saveFileName
 	}
-	des, _ := os.OpenFile(saveFileName, os.O_CREATE, 0777)
-	src, _ := os.OpenFile(pe.ngFile, os.O_RDONLY, 0777)
+	if _, err := os.Stat(saveFileName); os.IsNotExist(err) != true {
+		_ = os.Remove(saveFileName)
+	}
+	des, err := os.OpenFile(saveFileName, os.O_CREATE|os.O_RDWR, 0777)
+	Catch(err)
+	_, err = des.WriteString(currentConnected)
+	Catch(err)
 	defer (func() {
-		_ = src.Close()
 		_ = des.Close()
 	})()
-	_, err := io.Copy(des, src)
-	if err != nil {
-		panic(err)
-	}
 	return true
 }
 
@@ -725,7 +774,7 @@ func (pe *PhpExecuter) Save(saveFileName string) bool {
 
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
-func (pe *PhpExecuter) Rollback() int {
+func (p *PhpExecuter) Rollback() int {
 	var size int = 0
 	// ロールバック処理
 	// ファイルの内容を全て削除する
@@ -742,53 +791,19 @@ func (pe *PhpExecuter) Rollback() int {
 	//all, _ := io.ReadAll(pe.okFileFp)
 	//size, _ := pe.ngFileFp.Write(all)
 
-	var db *sql.DB = pe.db
+	var db *sql.DB = p.db
 	var err error = nil
 	tx, _ := db.Begin()
 	statment, _ := tx.Prepare("delete from phptext where id = ?")
-	_, _ = statment.Exec(pe.currentId())
+	_, _ = statment.Exec(p.currentId())
 	err = tx.Commit()
 	if err != nil {
 		log.Fatal(err)
 	}
 	return size
 }
-func (pe *PhpExecuter) Clear() bool {
+func (p *PhpExecuter) Clear() bool {
 	//_ = pe.ngFileFp.Truncate(0)
 	//_ = pe.okFileFp.Truncate(0)
 	return true
-}
-
-// PHPのfile関数と同様の処理をエミュレーション
-func File(filePath string) ([]string, error) {
-	var fileRows []string = make([]string, 0, 512)
-	//fmt.Printf("len(fileRows): %v\n", len(fileRows))
-	// 引数に渡されたファイルを読みこむ
-	fp, err := os.Open(filePath)
-	if err != nil {
-		return []string{}, err
-	}
-	allBuffer, err := io.ReadAll(fp)
-	// Handling error.
-	if err != nil {
-		return []string{}, err
-	}
-
-	var singleRow []byte
-	var rowsNumber int = 0
-
-	for _, value := range allBuffer {
-		if string(value) == ("\n") {
-			//fmt.Println(string(singleRow))
-			fileRows = append(fileRows, string(singleRow))
-			// 1行分をリセット
-			singleRow = []byte{}
-			rowsNumber++
-			continue
-		}
-		singleRow = append(singleRow, value)
-	}
-	//fmt.Printf("fileRows: %v\n", fileRows)
-	fileRows = fileRows[:rowsNumber]
-	return fileRows, nil
 }
