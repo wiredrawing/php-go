@@ -17,38 +17,11 @@ import (
 	"phpgo/wiredrawing/inputter"
 	"phpgo/wiredrawing/parallel"
 	"runtime"
-	//"strings"
-	"time"
 	// ここは独自パッケージ
 	//"golang.org/x/sys/windows"
 )
 
 // var command *cobra.Command = new(cobra.Command)
-
-// ガベージコレクションを任意の時間間隔で実行
-func regularsGarbageCollection() {
-
-	var mem runtime.MemStats
-	for {
-		runtime.ReadMemStats(&mem)
-		//fmt.Printf("(1)Alloc:%d, (2)TotalAlloc:%d, (3)Sys:%d, (4)HeapAlloc:%d, (5)HeapSys:%d, (6)HeapReleased:%d\r\n",
-		//	mem.Alloc, // HeapAllocと同値
-		//	mem.TotalAlloc,
-		//	mem.Sys,       // OSから得た合計バイト数
-		//	mem.HeapAlloc, // Allocと同値
-		//	mem.HeapSys,
-		//	mem.HeapReleased, // OSへ返却されたヒープ
-		//)
-		time.Sleep(5 * time.Second)
-		// fmt.Println("Executed gc")
-		runtime.GC()
-		//debug.FreeOSMemory()
-		if mem.Alloc > 1000000 {
-			runtime.GC()
-			//debug.FreeOSMemory()
-		}
-	}
-}
 
 // ファイルのハッシュ値を計算する
 func hash(filepath string) string {

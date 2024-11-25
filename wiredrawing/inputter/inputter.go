@@ -36,7 +36,6 @@ func makeDirectory(dir string) bool {
 func init() {
 
 	const ngFile = ".validation.dat"
-	const okFile = ".success.dat"
 	var filePathForError = ".erorr_message.dat"
 
 	var homeDir string
@@ -66,11 +65,6 @@ func init() {
 	// phpの<?phpタグを記述する
 	file1.Write([]byte("<?php " + "\n"))
 
-	// 実際の実行ファイル用
-	file2, err = os.Create(dotDir + "\\" + okFile)
-	if err != nil {
-		panic(err)
-	}
 	// phpの<?phpタグを記述する
 	file2.WriteString("<?php " + "\n")
 
@@ -101,16 +95,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	}
 
 	var ngFile = ".validation.dat"
-	var okFile = ".success.dat"
-
-	// OSの一時ファイル作成に任せる
-	okFileTemp, err := os.CreateTemp("", ".success.dat.")
-	if err != nil {
-		panic(err)
-	}
-	// <?php を 一行目に書き込む
-	_, _ = okFileTemp.Write([]byte("<?php " + "\n"))
-	okFile = okFileTemp.Name()
 
 	ngFileTemp, err := os.CreateTemp("", ".validation.dat.")
 	if err != nil {
@@ -146,7 +130,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 
 	var rawInputText string = ""
 	for {
-		php.SetOkFile(okFile)
 		php.SetNgFile(ngFile)
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
@@ -156,7 +139,8 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		}
 		// 両端のスペースを削除
 		var isExit int
-		rawInputText, isExit = wiredrawing.StdInput("", inputText)
+		// multiline-ny側で非同期実行するためにphpオブジェクトを渡す
+		rawInputText, isExit = wiredrawing.StdInput("", inputText, &php)
 		if isExit == 1 {
 			continue
 		} else if isExit == 2 {
@@ -185,7 +169,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			continue
 		} else if inputText == "rollback" {
 			php.Rollback()
-			isFatal, _ := php.DetectFatalError()
+			isFatal, _ := php.DetectFatalError(1)
 			errorBuffer := php.ErrorBuffer
 			if isFatal == true {
 				prompt = " ... "
@@ -196,11 +180,9 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 					prompt = " " + (inputPrompt) + " "
 				}
 			}
-			//php.SetOkFile(ngFile)
 			cl := php.SetPreviousList(0)
-			_, _ = php.Execute(false)
-			//_ = concatenate(ngFile)
-			logs := php.Cat()
+			_, _ = php.Execute(false, 1)
+			logs := php.Cat(1)
 			for index := range logs {
 				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
 				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
@@ -223,7 +205,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			//fmt.Print(prompt)
 			// 両端のスペースを削除
 			rawInputText = ""
-			var inputText, _ = wiredrawing.StdInput(prompt, rawInputText)
+			var inputText, _ = wiredrawing.StdInput(prompt, rawInputText, &php)
 			inputText = strings.TrimSpace(inputText)
 			// 入力内容が空文字の場合コマンドラインを終了する
 			if len(inputText) == 0 {
@@ -251,7 +233,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			// バリデーション用のファイルを空にする
 			php.Clear()
 			// ただPHP開始タグのみ先頭に追記しておく
-			php.WriteToNg("<?php " + "\n")
+			php.WriteToNg("<?php "+"\n", 1)
 			fmt.Print("\033[0m")
 			php.IsPermissibleError = false
 			prompt = fmt.Sprintf(" %s ", inputPrompt)
@@ -262,21 +244,20 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 
 		// cat と入力すると現在まで入力している内容を出力する
 		if inputText == "cat" {
-			logs := php.Cat()
+			logs := php.Cat(1)
 			for index := range logs {
 				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
 				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
 				fmt.Println(config.ColorWrapping("32", (logs[index]["text"]).(string)))
 			}
-			//concatenate(ngFile)
 			continue
 		}
 
-		php.WriteToNg(rawInputText + "\n")
+		php.WriteToNg(rawInputText+"\n", 1)
 		// ----------------------------------------------------------------
 		// Fatal Error以外を検出する
 		// ----------------------------------------------------------------
-		isFatal, err := php.DetectFatalError()
+		isFatal, err := php.DetectFatalError(1)
 		if err != nil {
 			panic(err)
 		}
@@ -306,7 +287,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 
 		//_, _ = php.CopyFromNgToOk()
 
-		if outputSize, err := php.Execute(true); err != nil {
+		if outputSize, err := php.Execute(true, 1); err != nil {
 			fmt.Println(config.ColorWrapping("31", err.Error()))
 		} else {
 			if outputSize > 0 {

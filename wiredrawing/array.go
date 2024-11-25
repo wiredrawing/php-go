@@ -63,6 +63,9 @@ func (my *MyBinder) String() string {
 
 }
 
+// ログを書き込むファイルを開く（なければ作成）
+var f *os.File
+
 // InArray ------------------------------------------------
 // PHPのin_array関数をシミュレーション
 // 第二引数 haystackに第一引数 needleが含まれていれば
@@ -89,9 +92,7 @@ var ed multiline.Editor
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
-
-func StdInput(prompt string, previousInput string) (string, int) {
-
+func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int) {
 	ctx := context.Background()
 	type ac = readline.AnonymousCommand
 
@@ -101,6 +102,7 @@ func StdInput(prompt string, previousInput string) (string, int) {
 	Catch(ed.BindKey(AltEnter, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlBackslash, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlZ, readline.AnonymousCommand(ed.Submit)))
+	Catch(ed.BindKey(keys.CtrlUnderbar, readline.AnonymousCommand(ed.Submit)))
 	//ed.BindKey(keys.CtrlC, myBinder)
 	if len(previousInput) > 0 {
 		if previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" && previousInput != "save" {
@@ -148,12 +150,9 @@ func StdInput(prompt string, previousInput string) (string, int) {
 		if strings.HasSuffix(connected, "_") {
 			return true
 		}
-
+		// 第二引数は<0>
+		p.WriteToDB(strings.Join(replaceLines, "\n"), 0)
 		return false
-
-		//fmt.Printf("lines: %v\n", lines)
-		//fmt.Printf("int => %v", index)
-		//return strings.HasSuffix(strings.TrimSpace(lines[len(lines)-1]), ";")
 	})
 	// To enable escape sequence on Windows.
 	// (On other operating systems, it can be ommited)
@@ -243,7 +242,7 @@ func (p *PhpExecuter) currentId() int {
 	var db *sql.DB = p.db
 	var currentId int = 0
 	tx, _ := db.Begin()
-	rows, _ := tx.Query("select max(id) from phptext")
+	rows, _ := tx.Query("select max(id) from phptext where is_production = 1")
 	for rows.Next() {
 		err := rows.Scan(&currentId)
 		if err != nil {
@@ -341,17 +340,18 @@ func (p *PhpExecuter) ResetWholeErrors() {
 	p.wholeErrors = []string{}
 }
 
-func (p *PhpExecuter) Cat() []map[string]interface{} {
+func (p *PhpExecuter) Cat(isProd int) []map[string]interface{} {
 	db := p.db
-	query, err := db.Query("select id, text from phptext order by id asc")
+	statement, err := db.Prepare("select id, text from phptext where is_production = ? order by id asc")
 	if err != nil {
 		log.Fatal(err)
 	}
+	rows, _ := statement.Query(isProd)
 	var logs []map[string]interface{}
-	for query.Next() {
+	for rows.Next() {
 		var id int
 		var text string
-		err := query.Scan(&id, &text)
+		err := rows.Scan(&id, &text)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -382,22 +382,17 @@ func (p *PhpExecuter) SetPhpExcutePath(phpPath string) {
 	p.PhpPath = phpPath
 }
 
-func (p *PhpExecuter) Execute(showBuffer bool) (int, error) {
-	logs := p.Cat()
+func (p *PhpExecuter) Execute(showBuffer bool, isProd int) (int, error) {
+	logs := p.Cat(isProd)
 	phpLogs := ""
 	for index := range logs {
 		phpLogs += logs[index]["text"].(string) + "\n"
 	}
-	fp, _ := os.OpenFile(p.okFile, os.O_RDWR, 0777)
-	fp.Truncate(0)
-	fp.Seek(0, 0)
-	fp.WriteString(phpLogs)
+	fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
+	Catch(fp.Truncate(0))
+	Catch(fp.Seek(0, 0))
+	Catch(fp.WriteString(phpLogs))
 	var colorCode string = config.Blue
-	//// 一旦okFileFpを閉じるff
-	//err := pe.okFileFp.Close()
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
 	// isValidate == true の場合はngFileを実行(事前実行)
 	command := exec.Command(p.PhpPath, fp.Name())
 
@@ -482,7 +477,7 @@ func (p *PhpExecuter) Execute(showBuffer bool) (int, error) {
 
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
-func (p *PhpExecuter) DetectFatalError() (bool, error) {
+func (p *PhpExecuter) DetectFatalError(isProd int) (bool, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -501,37 +496,15 @@ func (p *PhpExecuter) DetectFatalError() (bool, error) {
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 	p.IsPermissibleError = false
 
-	//// 事前にPHPコマンド <php -l file-name>でシンタックスエラーのみを先にチェックする
-	//syntax := exec.Command(pe.PhpPath, "-l", pe.ngFile)
-	//syntexBuffer, err := syntax.StderrPipe()
-	//if err != nil {
-	//	panic(err)
-	//}
-	//_ = syntax.Start()
-	//// シンタックスエラーがでている場合
-	//loaded, err := io.ReadAll(syntexBuffer)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//_ = syntax.Wait()
-	//if syntax.ProcessState.ExitCode() != 0 {
-	//	// シンタックスエラーがあった場合
-	//	//fmt.Printf("Syntax Error: <<<%v>>>\n", string(loaded))
-	//	pe.IsPermissibleError = true
-	//	pe.ErrorBuffer = loaded
-	//	pe.wholeErrors = append(pe.wholeErrors, string(loaded))
-	//	return true, nil
-	//}
-
-	logs := p.Cat()
+	logs := p.Cat(isProd)
 	phpLogs := ""
 	for index := range logs {
 		phpLogs += logs[index]["text"].(string) + "\n"
 	}
 	fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
-	fp.Truncate(0)
-	fp.Seek(0, 0)
-	fp.WriteString(phpLogs)
+	Catch(fp.Truncate(0))
+	Catch(fp.Seek(0, 0))
+	Catch(fp.WriteString(phpLogs))
 	// 終了コードが不正な場合,FatalErrorを取得する
 	c := exec.Command(p.PhpPath, fp.Name())
 	buffer, err := c.StderrPipe()
@@ -604,46 +577,13 @@ func (p *PhpExecuter) GetFatalError() []byte {
 	}
 }
 
-func (p *PhpExecuter) SetOkFile(okFile string) {
-	if p.okFile == "" {
-		p.okFile = okFile
-	}
-	if p.okFileFp == nil {
-		//fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//pe.okFileFp = fp
-	} else {
-		//pe.okFileFp.Close()
-		//fp, err := os.OpenFile(pe.okFile, os.O_RDWR, 0777)
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//pe.okFileFp = fp
-	}
-}
 func (p *PhpExecuter) SetNgFile(ngFile string) {
 	if p.ngFile == "" {
 		p.ngFile = ngFile
 	}
-	if p.ngFileFp == nil {
-		//fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//pe.ngFileFp = fp
-	} else {
-		//pe.ngFileFp.Close()
-		//fp, err := os.OpenFile(pe.ngFile, os.O_RDWR, 0777)
-		//if err != nil {
-		//	log.Fatal(err)
-		//}
-		//pe.ngFileFp = fp
-	}
 }
 
-// PHPファイルの実行結果をSqliteに保存
+// WriteResultToDB PHPファイルの実行結果をSqliteに保存
 func (p *PhpExecuter) WriteResultToDB(result string) bool {
 	db := p.db
 	// Start transaction.
@@ -693,22 +633,15 @@ func (p *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	return latestId
 }
 
-func (p *PhpExecuter) WriteToNg(input string) int64 {
-	//var err error = nil
-	//// ngFileのポインタを末尾に移動させる
-	//_, _ = io.ReadAll(pe.ngFileFp)
-	//size, err := pe.ngFileFp.WriteString(input)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	latestId := p.WriteToDB(input, 0)
+func (p *PhpExecuter) WriteToNg(input string, isProd int) int64 {
+	latestId := p.WriteToDB(input, isProd)
 	return latestId
 }
 
 func (p *PhpExecuter) Save(saveFileName string) bool {
 	current := make([]PHPSource, 0, 64)
 	sql := `
-		select id, text from phptext order by id asc
+		select id, text from phptext where is_production = 1 order  by id asc
 		`
 	tx, err := p.db.Begin()
 	Catch(err)
@@ -719,7 +652,6 @@ func (p *PhpExecuter) Save(saveFileName string) bool {
 	currentConnected := ""
 	for rows.Next() {
 		Catch(rows.Scan(&sourceId, &sourceText))
-		fmt.Printf("sourceText => %v", sourceText)
 		currentConnected += sourceText + "\n"
 		current = append(current, PHPSource{text: sourceText, sourceId: sourceId})
 	}
@@ -755,41 +687,10 @@ func (p *PhpExecuter) Save(saveFileName string) bool {
 	return true
 }
 
-//func (pe *PhpExecuter) CopyFromNgToOk() (int, []byte) {
-//	_, err := pe.ngFileFp.Seek(0, 0)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//	allText, err := io.ReadAll(pe.ngFileFp)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//	_ = pe.okFileFp.Truncate(0)
-//	size, err := pe.okFileFp.Write(allText)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//	return size, allText
-//}
-
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
 func (p *PhpExecuter) Rollback() int {
 	var size int = 0
-	// ロールバック処理
-	// ファイルの内容を全て削除する
-	//_ = pe.ngFileFp.Truncate(0)
-	//_, err := pe.ngFileFp.Seek(0, 0)
-	//if err != nil {
-	//	log.Fatalf("前実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
-	//}
-	//// OkFileのファイルポインタを先頭に移す
-	//_, err = pe.okFileFp.Seek(0, 0)
-	//if err != nil {
-	//	log.Fatalf("後実行用ファイルのポインタを先頭に移動できませんでした: [%v]", err)
-	//}
-	//all, _ := io.ReadAll(pe.okFileFp)
-	//size, _ := pe.ngFileFp.Write(all)
 
 	var db *sql.DB = p.db
 	var err error = nil
@@ -803,7 +704,5 @@ func (p *PhpExecuter) Rollback() int {
 	return size
 }
 func (p *PhpExecuter) Clear() bool {
-	//_ = pe.ngFileFp.Truncate(0)
-	//_ = pe.okFileFp.Truncate(0)
 	return true
 }
