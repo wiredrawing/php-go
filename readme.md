@@ -15,5 +15,8 @@ PHPのコードをターミナル上でちょこちょこっと実行したい�
 得に難しいことはやってなくて,技術的に注目を集めるものではありませんが,よければ使って下さい。
 
 
-### Sample 
+### Sample 01
 ![alt text](sample.gif)
+
+### Sample 002
+![alt text](demo.gif)
