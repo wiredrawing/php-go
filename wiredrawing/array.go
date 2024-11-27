@@ -116,7 +116,6 @@ func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int)
 		return fmt.Fprintf(w, "\033[0m%d:>>> ", lnum+1)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
-		fmt.Print("\033[33m")
 		// strip input text.
 		var replaceLines []string
 		for _, v := range lines {

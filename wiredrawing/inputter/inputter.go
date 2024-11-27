@@ -80,6 +80,12 @@ func init() {
 
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool, error) {
+
+	fmt.Println("入力したコードの実行: Alt + Enter or Input `_` ")
+	fmt.Println("直前までの入力内容を確認: Input `cat` ")
+	fmt.Println("直前の入力を取り消す: Input `rollback` ")
+	fmt.Println("シェルを終了する: Input `exit` then `yes` ")
+
 	// phpPathが未指定の場合はハイフンが設定されているため
 	// それ以外の場合は指定したphpパスで実行する
 	var phpExecutePath = "php"
