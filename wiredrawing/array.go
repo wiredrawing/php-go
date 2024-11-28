@@ -37,31 +37,6 @@ type PHPSource struct {
 	text     string
 	sourceId int
 }
-type MyBinder struct {
-	ctrlCNum int
-	prompt   int
-}
-
-func (my *MyBinder) SetPrompt(prompt int) {
-	my.prompt = prompt
-}
-func (my *MyBinder) Prompt() int {
-	return my.prompt
-}
-func (my *MyBinder) Call(ctx context.Context, b *readline.Buffer) readline.Result {
-	if my.prompt > 0 {
-		my.prompt += 1
-		return readline.ENTER
-	} else {
-		my.prompt = 1
-		fmt.Println(config.ColorWrapping(config.Red, "終了する場合はもう一度 ctrl+C を押して下さい"))
-		return readline.ENTER
-	}
-}
-func (my *MyBinder) String() string {
-	return "MyBinder"
-
-}
 
 // ログを書き込むファイルを開く（なければ作成）
 var f *os.File
@@ -83,16 +58,12 @@ func InArray(needle string, haystack []string) bool {
 	return false
 }
 
-var myBinder *MyBinder = &MyBinder{
-	ctrlCNum: 0,
-	prompt:   0,
-}
 var ed multiline.Editor
 
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
 // ----------------------------------------
-func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int) {
+func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int) {
 	ctx := context.Background()
 	type ac = readline.AnonymousCommand
 
@@ -103,7 +74,6 @@ func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int)
 	Catch(ed.BindKey(keys.CtrlBackslash, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlZ, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlUnderbar, readline.AnonymousCommand(ed.Submit)))
-	//ed.BindKey(keys.CtrlC, myBinder)
 	if len(previousInput) > 0 {
 		if previousInput != "exit" && previousInput != "rollback" && previousInput != "cat" && previousInput != "save" {
 			splitPreviousInput := strings.Split(previousInput, "\n")
@@ -162,14 +132,14 @@ func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int)
 	ed.SetHistoryCycling(true)
 
 	for {
-		fmt.Print("\033[0m")
+		fmt.Print(`[0m`)
 		lines, err := ed.Read(ctx)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.Error())
-			return strings.Join(lines, ""), myBinder.Prompt()
+			return strings.Join(lines, ""), 0
 		}
 		if len(lines) == 0 {
-			return "", myBinder.Prompt()
+			return "", 0
 		}
 
 		var fixed []string
@@ -179,7 +149,7 @@ func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int)
 			}
 		}
 		if len(fixed) == 0 {
-			return "", myBinder.Prompt()
+			return "", 0
 		}
 		if fixed[len(fixed)-1] == "\\c" {
 			fixed = fixed[:len(fixed)-1]
@@ -199,11 +169,11 @@ func StdInput(prompt string, previousInput string, p *PhpExecuter) (string, int)
 		if strings.HasSuffix(result, "_") {
 			result = result[:len(result)-1]
 		}
-		return result, myBinder.Prompt()
+		return result, 0
 	}
 }
 
-type PhpExecuter struct {
+type PHPExecuter struct {
 	PhpPath            string
 	IsPermissibleError bool
 	ErrorBuffer        []byte
@@ -223,7 +193,7 @@ type PhpExecuter struct {
 	hashKey      string
 }
 
-func (p *PhpExecuter) nextId() int {
+func (p *PHPExecuter) nextId() int {
 	// 一時的にローカル変数に
 	var db *sql.DB = p.db
 	var nextId int
@@ -237,7 +207,7 @@ func (p *PhpExecuter) nextId() int {
 	_ = tx.Commit()
 	return nextId
 }
-func (p *PhpExecuter) currentId() int {
+func (p *PHPExecuter) currentId() int {
 	var db *sql.DB = p.db
 	var currentId int = 0
 	tx, _ := db.Begin()
@@ -255,7 +225,7 @@ func (p *PhpExecuter) currentId() int {
 	return currentId
 }
 
-func (p *PhpExecuter) makeHashKey() string {
+func (p *PHPExecuter) makeHashKey() string {
 	var today time.Time = time.Now()
 	// 保存用のハッシュを作詞絵
 	rand.Seed(today.Unix())
@@ -268,7 +238,7 @@ func (p *PhpExecuter) makeHashKey() string {
 	hashKey := fmt.Sprintf("%x", first.Sum(nil))
 	return hashKey
 }
-func (p *PhpExecuter) InitDB() *sql.DB {
+func (p *PHPExecuter) InitDB() *sql.DB {
 
 	p.hashKey = p.makeHashKey()
 	// sqliteの初期化R
@@ -329,17 +299,17 @@ func (p *PhpExecuter) InitDB() *sql.DB {
 }
 
 // WholeErrors ----------------------------------------
-func (p *PhpExecuter) WholeErrors() []string {
+func (p *PHPExecuter) WholeErrors() []string {
 	return p.wholeErrors
 }
 
 // ResetWholeErrors ----------------------------------------
 // 溜まったエラーメッセージをリセットする
-func (p *PhpExecuter) ResetWholeErrors() {
+func (p *PHPExecuter) ResetWholeErrors() {
 	p.wholeErrors = []string{}
 }
 
-func (p *PhpExecuter) Cat(isProd int) []map[string]interface{} {
+func (p *PHPExecuter) Cat(isProd int) []map[string]interface{} {
 	db := p.db
 	statement, err := db.Prepare("select id, text from phptext where is_production = ? order by id asc")
 	if err != nil {
@@ -365,23 +335,23 @@ func (p *PhpExecuter) Cat(isProd int) []map[string]interface{} {
 
 // SetPreviousList ----------------------------------------
 // 前回のセーブポイントを変更する
-func (p *PhpExecuter) SetPreviousList(number int) int {
+func (p *PHPExecuter) SetPreviousList(number int) int {
 	var currenetLine int = p.previousLine
 	p.previousLine = number
 	return currenetLine
 }
-func (p *PhpExecuter) GetPreviousList() int {
+func (p *PHPExecuter) GetPreviousList() int {
 	var currenetLine int = p.previousLine
 	return currenetLine
 }
-func (p *PhpExecuter) SetPhpExcutePath(phpPath string) {
+func (p *PHPExecuter) SetPhpExcutePath(phpPath string) {
 	if phpPath == "" {
 		p.PhpPath = "php"
 	}
 	p.PhpPath = phpPath
 }
 
-func (p *PhpExecuter) Execute(showBuffer bool, isProd int) (int, error) {
+func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 	logs := p.Cat(isProd)
 	phpLogs := ""
 	for index := range logs {
@@ -476,7 +446,7 @@ func (p *PhpExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
-func (p *PhpExecuter) DetectFatalError(isProd int) (bool, error) {
+func (p *PHPExecuter) DetectFatalError(isProd int) (bool, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -549,7 +519,7 @@ func (p *PhpExecuter) DetectFatalError(isProd int) (bool, error) {
 	return true, nil
 }
 
-func (p *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
+func (p *PHPExecuter) DetectErrorExceptFatalError() ([]byte, error) {
 	c := exec.Command(p.PhpPath, p.ngFile)
 	buffer, err := c.StderrPipe()
 	if err != nil {
@@ -561,7 +531,7 @@ func (p *PhpExecuter) DetectErrorExceptFatalError() ([]byte, error) {
 	return loadedByte, nil
 }
 
-func (p *PhpExecuter) GetFatalError() []byte {
+func (p *PHPExecuter) GetFatalError() []byte {
 	c := exec.Command(p.PhpPath, p.ngFile)
 	if buffer, err := c.StderrPipe(); err != nil {
 		panic(err)
@@ -576,14 +546,14 @@ func (p *PhpExecuter) GetFatalError() []byte {
 	}
 }
 
-func (p *PhpExecuter) SetNgFile(ngFile string) {
+func (p *PHPExecuter) SetNgFile(ngFile string) {
 	if p.ngFile == "" {
 		p.ngFile = ngFile
 	}
 }
 
 // WriteResultToDB PHPファイルの実行結果をSqliteに保存
-func (p *PhpExecuter) WriteResultToDB(result string) bool {
+func (p *PHPExecuter) WriteResultToDB(result string) bool {
 	db := p.db
 	// Start transaction.
 	tx, _ := db.Begin()
@@ -610,7 +580,7 @@ func (p *PhpExecuter) WriteResultToDB(result string) bool {
 }
 
 // WriteToDB 指定したテキストをSqliteに書き込む
-func (p *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
+func (p *PHPExecuter) WriteToDB(input string, isProduction int) int64 {
 	// sqliteへ書き込む
 	tx, _ := p.db.Begin()
 	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
@@ -632,12 +602,12 @@ func (p *PhpExecuter) WriteToDB(input string, isProduction int) int64 {
 	return latestId
 }
 
-func (p *PhpExecuter) WriteToNg(input string, isProd int) int64 {
+func (p *PHPExecuter) WriteToNg(input string, isProd int) int64 {
 	latestId := p.WriteToDB(input, isProd)
 	return latestId
 }
 
-func (p *PhpExecuter) Save(saveFileName string) bool {
+func (p *PHPExecuter) Save(saveFileName string) bool {
 	current := make([]PHPSource, 0, 64)
 	sql := `
 		select id, text from phptext where is_production = 1 order  by id asc
@@ -688,7 +658,7 @@ func (p *PhpExecuter) Save(saveFileName string) bool {
 
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
-func (p *PhpExecuter) Rollback() int {
+func (p *PHPExecuter) Rollback() int {
 	var size int = 0
 
 	var db *sql.DB = p.db
@@ -702,6 +672,6 @@ func (p *PhpExecuter) Rollback() int {
 	}
 	return size
 }
-func (p *PhpExecuter) Clear() bool {
+func (p *PHPExecuter) Clear() bool {
 	return true
 }

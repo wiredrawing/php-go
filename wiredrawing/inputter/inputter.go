@@ -2,12 +2,11 @@ package inputter
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"phpgo/config"
 	"phpgo/wiredrawing"
 	"runtime"
-	"runtime/debug"
+	//"runtime/debug"
 	"strings"
 )
 
@@ -35,46 +34,46 @@ func makeDirectory(dir string) bool {
 // ----------------------------------------------
 func init() {
 
-	const ngFile = ".validation.dat"
-	var filePathForError = ".erorr_message.dat"
-
-	var homeDir string
-	homeDir, _ = os.UserHomeDir()
-	// 本アプリケーション専用の設定ディレクトリ
-	var dotDir string = ""
-	if runtime.GOOS == "windows" {
-		dotDir = homeDir + "\\.php-go"
-	} else {
-		dotDir = homeDir + "/.php-go"
-	}
-
-	// ディレクトリが存在しない場合は作成する
-	makeDirectory(dotDir)
-
-	filePathForError = dotDir + "\\" + filePathForError
-
-	var file1 *os.File
-	var file2 *os.File
-	var file3 *os.File
-
-	// 入力内容のコマンド結果確認用
-	file1, err = os.Create(dotDir + "\\" + ngFile)
-	if err != nil {
-		panic(err)
-	}
-	// phpの<?phpタグを記述する
-	file1.Write([]byte("<?php " + "\n"))
-
-	// phpの<?phpタグを記述する
-	file2.WriteString("<?php " + "\n")
-
-	// 実行時エラーの出力用ファイル
-	file3, err = os.Create(filePathForError)
-	if err != nil {
-		log.Printf("Pointer of file3: %p\n", file3)
-		log.Printf("Could not create the file: %s", filePathForError)
-		panic(err)
-	}
+	//const ngFile = ".validation.dat"
+	//var filePathForError = ".erorr_message.dat"
+	//
+	//var homeDir string
+	//homeDir, _ = os.UserHomeDir()
+	//// 本アプリケーション専用の設定ディレクトリ
+	//var dotDir string = ""
+	//if runtime.GOOS == "windows" {
+	//	dotDir = homeDir + "\\.php-go"
+	//} else {
+	//	dotDir = homeDir + "/.php-go"
+	//}
+	//
+	//// ディレクトリが存在しない場合は作成する
+	//makeDirectory(dotDir)
+	//
+	//filePathForError = dotDir + "\\" + filePathForError
+	//
+	//var file1 *os.File
+	//var file2 *os.File
+	//var file3 *os.File
+	//
+	//// 入力内容のコマンド結果確認用
+	//file1, err = os.Create(dotDir + "\\" + ngFile)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//// phpの<?phpタグを記述する
+	//file1.Write([]byte("<?php " + "\n"))
+	//
+	//// phpの<?phpタグを記述する
+	//file2.WriteString("<?php " + "\n")
+	//
+	//// 実行時エラーの出力用ファイル
+	//file3, err = os.Create(filePathForError)
+	//if err != nil {
+	//	log.Printf("Pointer of file3: %p\n", file3)
+	//	log.Printf("Could not create the file: %s", filePathForError)
+	//	panic(err)
+	//}
 
 }
 
@@ -119,7 +118,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	//var previousInputText = ""
 
 	// forループ外で宣言する
-	var php = wiredrawing.PhpExecuter{
+	var php = wiredrawing.PHPExecuter{
 		PhpPath: phpExecutePath,
 	}
 	php.InitDB()
@@ -244,7 +243,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			php.IsPermissibleError = false
 			prompt = fmt.Sprintf(" %s ", inputPrompt)
 			runtime.GC()
-			debug.FreeOSMemory()
+			//debug.FreeOSMemory()
 			continue
 		}
 

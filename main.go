@@ -2,12 +2,12 @@
 package main
 
 import (
-	"crypto/sha256"
+	//"crypto/sha256"
 	"fmt"
 	//"github.com/fsnotify/fsnotify"
 	//"golang.org/x/sys/windows"
-	"io/ioutil"
-	"log"
+	//"io/ioutil"
+	//"log"
 	"os"
 	"os/signal"
 	"phpgo/cmd"
@@ -23,32 +23,30 @@ import (
 
 // var command *cobra.Command = new(cobra.Command)
 
-// ファイルのハッシュ値を計算する
-func hash(filepath string) string {
-	file, err := os.Open(filepath)
-	if err != nil {
-		//log.Println(err)
-		return ""
-	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(file)
-	h := sha256.New()
-	readBytes, _ := ioutil.ReadAll(file)
-	_, err = h.Write(readBytes)
-	if err != nil {
-		log.Println(err)
-		return ""
-	}
-	hashedValue := h.Sum(nil)
-	var hashedValueString string = string(hashedValue)
-	return hashedValueString
-}
-
-const DefaultSurveillanceFileName string = "-"
+//// ファイルのハッシュ値を計算する
+//func hash(filepath string) string {
+//	file, err := os.Open(filepath)
+//	if err != nil {
+//		//log.Println(err)
+//		return ""
+//	}
+//	defer func(file *os.File) {
+//		err := file.Close()
+//		if err != nil {
+//			panic(err)
+//		}
+//	}(file)
+//	h := sha256.New()
+//	readBytes, _ := ioutil.ReadAll(file)
+//	_, err = h.Write(readBytes)
+//	if err != nil {
+//		log.Println(err)
+//		return ""
+//	}
+//	hashedValue := h.Sum(nil)
+//	var hashedValueString string = string(hashedValue)
+//	return hashedValueString
+//}
 
 func stringp(s string) *string {
 	return &s
