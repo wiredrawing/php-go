@@ -26,7 +26,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -411,19 +410,21 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 				// 出力内容の表示フラグがtrueの場合のみ
 				outputSize += len(tempSlice)
 				if showBuffer == true {
-					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
-					if err != nil {
-						log.Fatal(err)
-					}
+					Catch(fmt.Fprintf(os.Stdout, string(tempSlice)))
+					//_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
+					//if err != nil {
+					//	log.Fatal(err)
+					//}
 				}
 			} else {
 				// 出力内容の表示フラグがtrueの場合のみ
 				outputSize += len(readData)
 				if showBuffer == true {
-					_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
-					if err != nil {
-						log.Fatal(err)
-					}
+					Catch(fmt.Fprintf(os.Stdout, string(readData)))
+					//_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
+					//if err != nil {
+					//	log.Fatal(err)
+					//}
 				}
 			}
 		}
@@ -658,19 +659,26 @@ func (p *PHPExecuter) Save(saveFileName string) bool {
 
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
-func (p *PHPExecuter) Rollback() int {
-	var size int = 0
-
+func (p *PHPExecuter) Rollback() bool {
 	var db *sql.DB = p.db
 	var err error = nil
 	tx, _ := db.Begin()
-	statment, _ := tx.Prepare("delete from phptext where id = ?")
-	_, _ = statment.Exec(p.currentId())
-	err = tx.Commit()
-	if err != nil {
-		log.Fatal(err)
+	rows, _ := tx.Query("select count(id) from phptext where is_production = 1")
+
+	var surplus int
+	for rows.Next() {
+		Catch(rows.Scan(&surplus))
 	}
-	return size
+	if surplus > 1 {
+		statment, _ := tx.Prepare("delete from phptext where id = ?")
+		_, _ = statment.Exec(p.currentId())
+		err = tx.Commit()
+		if err != nil {
+			log.Fatal(err)
+		}
+		return true
+	}
+	return false
 }
 func (p *PHPExecuter) Clear() bool {
 	return true
