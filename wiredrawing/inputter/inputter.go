@@ -10,80 +10,21 @@ import (
 	"strings"
 )
 
-// 入力内容を保持する変数
-//var inputText = ""
-
-var err error
-
-func makeDirectory(dir string) bool {
-	_, err := os.Stat(dir)
-	// 指定したディレクトリが存在している場合は何もしない
-	if (err != nil) && os.IsNotExist(err) {
-		// <dotDir>が存在しない場
-		err = os.Mkdir(dir, 0777)
-		if err != nil {
-			panic(err)
-		}
-	}
-	return true
-}
-
 // ----------------------------------------------//
 // パッケージの初期化
 // init関数は値を返却できない
 // ----------------------------------------------
-func init() {
-
-	//const ngFile = ".validation.dat"
-	//var filePathForError = ".erorr_message.dat"
-	//
-	//var homeDir string
-	//homeDir, _ = os.UserHomeDir()
-	//// 本アプリケーション専用の設定ディレクトリ
-	//var dotDir string = ""
-	//if runtime.GOOS == "windows" {
-	//	dotDir = homeDir + "\\.php-go"
-	//} else {
-	//	dotDir = homeDir + "/.php-go"
-	//}
-	//
-	//// ディレクトリが存在しない場合は作成する
-	//makeDirectory(dotDir)
-	//
-	//filePathForError = dotDir + "\\" + filePathForError
-	//
-	//var file1 *os.File
-	//var file2 *os.File
-	//var file3 *os.File
-	//
-	//// 入力内容のコマンド結果確認用
-	//file1, err = os.Create(dotDir + "\\" + ngFile)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//// phpの<?phpタグを記述する
-	//file1.Write([]byte("<?php " + "\n"))
-	//
-	//// phpの<?phpタグを記述する
-	//file2.WriteString("<?php " + "\n")
-	//
-	//// 実行時エラーの出力用ファイル
-	//file3, err = os.Create(filePathForError)
-	//if err != nil {
-	//	log.Printf("Pointer of file3: %p\n", file3)
-	//	log.Printf("Could not create the file: %s", filePathForError)
-	//	panic(err)
-	//}
-
-}
 
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool, error) {
-
+	processId := os.Getpid()
+	fmt.Println("------------------------------------------------")
+	fmt.Printf("Process Id: %v \n", processId)
 	fmt.Println("入力したコードの実行: Alt + Enter or Input `_` ")
 	fmt.Println("直前までの入力内容を確認: Input `cat` ")
 	fmt.Println("直前の入力を取り消す: Input `rollback` ")
 	fmt.Println("シェルを終了する: Input `exit` then `yes` ")
+	fmt.Println("------------------------------------------------")
 
 	// phpPathが未指定の場合はハイフンが設定されているため
 	// それ以外の場合は指定したphpパスで実行する
@@ -289,9 +230,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			php.Rollback()
 			continue
 		}
-
-		//_, _ = php.CopyFromNgToOk()
-
+		
 		if outputSize, err := php.Execute(true, 1); err != nil {
 			fmt.Println(config.ColorWrapping("31", err.Error()))
 		} else {

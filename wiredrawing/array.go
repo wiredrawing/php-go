@@ -37,9 +37,6 @@ type PHPSource struct {
 	sourceId int
 }
 
-// ログを書き込むファイルを開く（なければ作成）
-var f *os.File
-
 // InArray ------------------------------------------------
 // PHPのin_array関数をシミュレーション
 // 第二引数 haystackに第一引数 needleが含まれていれば
@@ -58,6 +55,15 @@ func InArray(needle string, haystack []string) bool {
 }
 
 var ed multiline.Editor
+
+var worsToExis []string = []string{
+	"exit",
+	"cat",
+	"yes",
+	"rollback",
+	"save",
+	"clear",
+}
 
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
@@ -104,7 +110,7 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 
 		if len(replaceLines) == 1 {
 			var f string = replaceLines[0]
-			if (f == "exit") || (f == "cat") || f == "yes" || f == "rollback" || f == "save" {
+			if InArray(f, worsToExis) {
 				return true
 			}
 		}
@@ -118,8 +124,6 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 		if strings.HasSuffix(connected, "_") {
 			return true
 		}
-		// 第二引数は<0>
-		p.WriteToDB(strings.Join(replaceLines, "\n"), 0)
 		return false
 	})
 	// To enable escape sequence on Windows.
@@ -154,9 +158,6 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 			fixed = fixed[:len(fixed)-1]
 		}
 		L := strings.Join(fixed, "\n")
-		//fmt.Println("-----")
-		//fmt.Println(L)
-		//fmt.Println("-----")
 		history.Add(L)
 		var stripLines []string
 		for _, value := range fixed {
@@ -168,6 +169,10 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 		if strings.HasSuffix(result, "_") {
 			result = result[:len(result)-1]
 		}
+		// 第二引数は<0>
+		if len(result) > 0 {
+			p.WriteToDB(result, 0)
+		}
 		return result, 0
 	}
 }
@@ -177,8 +182,6 @@ type PHPExecuter struct {
 	IsPermissibleError bool
 	ErrorBuffer        []byte
 	SuccessBuffer      []byte
-	okFile             string
-	okFileFp           *os.File
 	ngFile             string
 	ngFileFp           *os.File
 	previousLine       int
@@ -258,7 +261,7 @@ func (p *PHPExecuter) InitDB() *sql.DB {
 
 	createSql := `
 	create table phptext (
-	    id integer not null,
+	    id integer not null primary key autoincrement ,
 	    text text not null ,
 	    is_production int
 	)`
@@ -289,10 +292,9 @@ func (p *PHPExecuter) InitDB() *sql.DB {
 	if err != nil {
 		log.Fatal(err)
 	}
-	nextId := p.nextId()
 	tx, _ := db.Begin()
-	st, _ := db.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
-	st.Exec(nextId, "<?php", 1)
+	st, _ := db.Prepare("insert into phptext(text, is_production) values (?, ?)")
+	st.Exec("<?php", 1)
 	tx.Commit()
 	return db
 }
@@ -361,7 +363,7 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 	Catch(fp.Seek(0, 0))
 	Catch(fp.WriteString(phpLogs))
 	var colorCode string = config.Blue
-	// isValidate == true の場合はngFileを実行(事前実行)
+
 	command := exec.Command(p.PhpPath, fp.Name())
 
 	buffer, err := command.StdoutPipe()
@@ -378,13 +380,8 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 
 	currentLine = 0
 	var outputSize int = 0
-	// whenError == true の場合バッファ内容を返却してやる
-	//var bufferWhenError string
 	fmt.Print("\033[0m")
 	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
-	//t := time.Now()
-	//formatted := t.Format(time.RFC3339)
-	//_, _ = os.Stdout.WriteString(formatted + " ")
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
@@ -397,9 +394,6 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 		}
 		// 正味のバッファを取り出す
 		readData = readData[:n]
-		//bufferWhenError += string(readData)
-		//// 実行結果としてSqliteに保存する
-		//pe.WriteResultToDB(string(readData))
 
 		from := currentLine
 		to := currentLine + n
@@ -411,20 +405,12 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 				outputSize += len(tempSlice)
 				if showBuffer == true {
 					Catch(fmt.Fprintf(os.Stdout, string(tempSlice)))
-					//_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&tempSlice)))
-					//if err != nil {
-					//	log.Fatal(err)
-					//}
 				}
 			} else {
 				// 出力内容の表示フラグがtrueの場合のみ
 				outputSize += len(readData)
 				if showBuffer == true {
 					Catch(fmt.Fprintf(os.Stdout, string(readData)))
-					//_, err = os.Stdout.WriteString(*(*string)(unsafe.Pointer(&readData)))
-					//if err != nil {
-					//	log.Fatal(err)
-					//}
 				}
 			}
 		}
@@ -584,7 +570,7 @@ func (p *PHPExecuter) WriteResultToDB(result string) bool {
 func (p *PHPExecuter) WriteToDB(input string, isProduction int) int64 {
 	// sqliteへ書き込む
 	tx, _ := p.db.Begin()
-	st, err := tx.Prepare("insert into phptext(id, text, is_production) values (?, ?, ?)")
+	st, err := tx.Prepare("insert into phptext(text, is_production) values (?, ?)")
 	if err != nil {
 		panic(err)
 	}
@@ -594,7 +580,7 @@ func (p *PHPExecuter) WriteToDB(input string, isProduction int) int64 {
 	}
 	// 取得したnextID, 本文, 実行するタイミング
 	cleansing := strings.TrimRight(input, "\r\n ")
-	result, _ := st.Exec(p.nextId(), cleansing, isProduction)
+	result, _ := st.Exec(cleansing, isProduction)
 	latestId, err := result.LastInsertId()
 	err = tx.Commit()
 	if err != nil {
@@ -678,8 +664,19 @@ func (p *PHPExecuter) Rollback() bool {
 		}
 		return true
 	}
+	_ = tx.Commit()
 	return false
 }
 func (p *PHPExecuter) Clear() bool {
+	var db = p.db
+
+	tx, _ := db.Begin()
+	result, err := tx.Exec("delete from phptext")
+	if err != nil {
+		return false
+	}
+	affectedNum, _ := result.RowsAffected()
+	fmt.Printf("Deleted %v records.", affectedNum)
+	tx.Commit()
 	return true
 }
