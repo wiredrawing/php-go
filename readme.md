@@ -22,6 +22,12 @@ PHPのコードをターミナル上でちょこちょこっと実行したい�
         - ※Alt+Enterを押さない限りソースは実行されません
 
 
+### php組み込みのinteractive shellとの違い
+![multiline.png](multiline.png)
+上記のように複数行に渡って変種が可能
+カーソルキーで上下左右を編集して
+Alt + Enterキー(ctrl + Enterキー on windows)で実行するまで
+入力したコードは実行されません。
 
 ### Sample 01
 ![alt text](sample.gif)
