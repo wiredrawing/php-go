@@ -13,7 +13,6 @@ import (
 	"github.com/nyaosorg/go-readline-ny/keys"
 	"github.com/nyaosorg/go-readline-ny/simplehistory"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net"
@@ -63,7 +62,7 @@ var worsToExis []string = []string{
 	"rollback",
 	"save",
 	"clear",
-}
+	"\\c"}
 
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
@@ -103,21 +102,10 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 		if len(replaceLines) == 0 {
 			return false
 		}
-		// 最後の行が<\c>で終わっている場合はtrueを返却する
-		if (len(replaceLines) > 0) && replaceLines[len(replaceLines)-1] == "\\c" {
+		// 最後の行が指定された値で終わっている場合はtrueを返却する
+		var f string = replaceLines[len(replaceLines)-1]
+		if InArray(f, worsToExis) {
 			return true
-		}
-
-		if len(replaceLines) == 1 {
-			var f string = replaceLines[0]
-			if InArray(f, worsToExis) {
-				return true
-			}
-		}
-		for number, value := range lines {
-			if (number == 0) && (value == "exit") {
-				return true
-			}
 		}
 		connected := strings.Join(replaceLines, "")
 		// 入力内容の末尾が_(アンダースコア)で完了している場合はtrueを返却
@@ -387,9 +375,11 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 		n, err := buffer.Read(readData)
 		if (err != nil) && (err != io.EOF) {
 			os.Stderr.Write([]byte(err.Error()))
+			readData = nil
 			break
 		}
 		if n == 0 {
+			readData = nil
 			break
 		}
 		// 正味のバッファを取り出す
@@ -513,57 +503,16 @@ func (p *PHPExecuter) DetectErrorExceptFatalError() ([]byte, error) {
 		return []byte{}, err
 	}
 	_ = c.Start()
-	loadedByte, err := ioutil.ReadAll(buffer)
+	loadedByte, err := io.ReadAll(buffer)
+	//loadedByte, err := ioutil.ReadAll(buffer)
 	_ = c.Wait()
 	return loadedByte, nil
-}
-
-func (p *PHPExecuter) GetFatalError() []byte {
-	c := exec.Command(p.PhpPath, p.ngFile)
-	if buffer, err := c.StderrPipe(); err != nil {
-		panic(err)
-	} else {
-		_ = c.Start()
-		loadedByte, err := ioutil.ReadAll(buffer)
-		if err != nil {
-			panic(err)
-		}
-		_ = c.Wait()
-		return loadedByte
-	}
 }
 
 func (p *PHPExecuter) SetNgFile(ngFile string) {
 	if p.ngFile == "" {
 		p.ngFile = ngFile
 	}
-}
-
-// WriteResultToDB PHPファイルの実行結果をSqliteに保存
-func (p *PHPExecuter) WriteResultToDB(result string) bool {
-	db := p.db
-	// Start transaction.
-	tx, _ := db.Begin()
-	rows, err := tx.Query("select max(id) from phptext")
-	if err != nil {
-		log.Fatal(err)
-	}
-	if rows.Next() != true {
-		log.Fatal("Failed fetching lastest primary key on phptext table.")
-	}
-	var lastestId int = 0
-	if err := rows.Scan(&lastestId); err != nil {
-		log.Fatal(err)
-	}
-
-	statement, _ := tx.Prepare("insert into results (result, phptext_id) values (?, ?)")
-	if _, err := statement.Exec(result, lastestId); err != nil {
-		log.Fatal(err)
-	}
-	if err := tx.Commit(); err != nil {
-		log.Fatal(err)
-	}
-	return true
 }
 
 // WriteToDB 指定したテキストをSqliteに書き込む
