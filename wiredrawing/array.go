@@ -15,7 +15,6 @@ import (
 	"io"
 	"log"
 	"math/rand"
-	"net"
 	"os"
 	"os/exec"
 	"phpgo/config"
@@ -25,10 +24,6 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
-)
-
-const (
-	AltEnter = "\x1B\r"
 )
 
 type PHPSource struct {
@@ -62,7 +57,8 @@ var worsToExis []string = []string{
 	"rollback",
 	"save",
 	"clear",
-	"\\c"}
+	"\\c",
+}
 
 // StdInput ----------------------------------------
 // 標準入力から入力された内容を文字列で返却する
@@ -74,7 +70,6 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 	Catch(ed.BindKey(keys.Delete, ac(ed.CmdBackwardDeleteChar)))
 	Catch(ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar)))
 	Catch(ed.BindKey(keys.Backspace, ac(ed.CmdBackwardDeleteChar)))
-	Catch(ed.BindKey(AltEnter, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlBackslash, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlZ, readline.AnonymousCommand(ed.Submit)))
 	Catch(ed.BindKey(keys.CtrlUnderbar, readline.AnonymousCommand(ed.Submit)))
@@ -126,7 +121,7 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 		fmt.Print(`[0m`)
 		lines, err := ed.Read(ctx)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
+			Catch(fmt.Fprintln(os.Stderr, err.Error()))
 			return strings.Join(lines, ""), 0
 		}
 		if len(lines) == 0 {
@@ -169,34 +164,15 @@ type PHPExecuter struct {
 	PhpPath            string
 	IsPermissibleError bool
 	ErrorBuffer        []byte
-	SuccessBuffer      []byte
 	ngFile             string
 	ngFileFp           *os.File
 	previousLine       int
-	connection         net.Conn
-	// 許容可能なエラーメッセージかどうか
-	isAllowable bool
 	// アプリケーション起動時からの全エラーメッセージを保持する
-	wholeErrors  []string
-	db           *sql.DB
-	DatabasePath string
-	hashKey      string
+	wholeErrors []string
+	db          *sql.DB
+	hashKey     string
 }
 
-func (p *PHPExecuter) nextId() int {
-	// 一時的にローカル変数に
-	var db *sql.DB = p.db
-	var nextId int
-	tx, _ := db.Begin()
-	rows, _ := tx.Query("select max(id) from phptext limit 1")
-	for rows.Next() {
-		_ = rows.Scan(&nextId)
-		nextId++
-	}
-	// 意味はないけどcommit
-	_ = tx.Commit()
-	return nextId
-}
 func (p *PHPExecuter) currentId() int {
 	var db *sql.DB = p.db
 	var currentId int = 0
@@ -241,7 +217,6 @@ func (p *PHPExecuter) InitDB() *sql.DB {
 		_ = os.Remove(dbPath)
 	}
 	db, err := sql.Open("sqlite", dbPath)
-	p.DatabasePath = dbPath
 	p.db = db
 	if err != nil {
 		panic(err)
@@ -374,7 +349,7 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
 		if (err != nil) && (err != io.EOF) {
-			os.Stderr.Write([]byte(err.Error()))
+			fmt.Printf(err.Error())
 			readData = nil
 			break
 		}
@@ -561,7 +536,7 @@ func (p *PHPExecuter) Save(saveFileName string) bool {
 		current = append(current, PHPSource{text: sourceText, sourceId: sourceId})
 	}
 
-	fmt.Printf("current => %v", current)
+	//fmt.Printf("current => %v", current)
 	// 保存のたびにハッシュキーを計算
 	p.hashKey = p.makeHashKey()
 	for _, row := range current {

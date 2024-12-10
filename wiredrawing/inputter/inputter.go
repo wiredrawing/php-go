@@ -40,15 +40,13 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		"yes",
 	}
 
-	var ngFile = ".validation.dat"
-
 	ngFileTemp, err := os.CreateTemp("", ".validation.dat.")
 	if err != nil {
 		panic(err)
 	}
 	// <?php を 一行目に書き込む
 	_, _ = ngFileTemp.Write([]byte("<?php " + "\n"))
-	ngFile = ngFileTemp.Name()
+	ngFile := ngFileTemp.Name()
 
 	// ----------------------------------------------
 	// 標準入力を可能にする
@@ -75,7 +73,9 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	var helpMessage = strings.Join(helpMessages, "\n")
 
 	var rawInputText string = ""
+	var counter int = 0
 	for {
+		counter++
 		php.SetNgFile(ngFile)
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
@@ -131,7 +131,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			logs := php.Cat(1)
 			for index := range logs {
 				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
-				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
+				fmt.Printf("%v[%s]: ", index+1, config.ColorWrapping("34", indexStr))
 				var statement string = (logs[index]["text"]).(string)
 				var _ []string = strings.Split(statement, "\n")
 				fmt.Println(config.ColorWrapping("32", statement))
@@ -141,6 +141,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		}
 
 		if inputText == "save" {
+			saveFileName = "save_" + fmt.Sprintf("%04d", counter) + ".php"
 			php.Save(saveFileName)
 			continue
 		}
@@ -153,12 +154,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			rawInputText = ""
 			var inputText, _ = wiredrawing.StdInput(prompt, rawInputText, &php)
 			inputText = strings.TrimSpace(inputText)
-			// 入力内容が空文字の場合コマンドラインを終了する
-			if len(inputText) == 0 {
-				fmt.Println(config.ColorWrapping("31", "キャンセルしました。"))
-				continue
-			}
-
 			if wiredrawing.InArray(inputText, wordsToExit) {
 				// 終了メッセージを表示
 				// string型を[]byteに変換して書き込み
@@ -170,6 +165,8 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				}
 				break
 			}
+			// 入力内容が空文字の場合コマンドラインを終了する
+			fmt.Println(config.ColorWrapping("31", "キャンセルしました。"))
 			continue
 		}
 
@@ -191,10 +188,10 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		// cat と入力すると現在まで入力している内容を出力する
 		if inputText == "cat" {
 			logs := php.Cat(1)
-			for index := range logs {
-				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
+			for index, log := range logs {
+				indexStr := fmt.Sprintf("%04d", index)
 				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
-				fmt.Println(config.ColorWrapping("32", (logs[index]["text"]).(string)))
+				fmt.Println(config.ColorWrapping("32", (log["text"]).(string)))
 			}
 			continue
 		}
@@ -230,7 +227,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			php.Rollback()
 			continue
 		}
-		
+
 		if outputSize, err := php.Execute(true, 1); err != nil {
 			fmt.Println(config.ColorWrapping("31", err.Error()))
 		} else {
