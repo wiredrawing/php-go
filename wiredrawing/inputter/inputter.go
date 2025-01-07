@@ -6,7 +6,9 @@ import (
 	"phpgo/config"
 	"phpgo/wiredrawing"
 	"runtime"
-	//"runtime/debug"
+
+	//"runtime"
+	"runtime/debug"
 	"strings"
 )
 
@@ -74,14 +76,18 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 
 	var rawInputText string = ""
 	var counter int = 0
+	var mem runtime.MemStats
 	for {
 		counter++
+		func() {
+			runtime.ReadMemStats(&mem)
+			fmt.Println(mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
+		}()
 		php.SetNgFile(ngFile)
+		fmt.Print(config.ColorWrapping("0", prompt))
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
 			fmt.Print(config.ColorWrapping("33", prompt))
-		} else {
-			//fmt.Print(config.ColorWrapping("0", prompt))
 		}
 		// 両端のスペースを削除
 		var isExit int
@@ -181,7 +187,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			php.IsPermissibleError = false
 			prompt = fmt.Sprintf(" %s ", inputPrompt)
 			runtime.GC()
-			//debug.FreeOSMemory()
+			debug.FreeOSMemory()
 			continue
 		}
 

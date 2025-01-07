@@ -20,8 +20,8 @@ import (
 	"phpgo/config"
 	. "phpgo/errorhandler"
 	"regexp"
-	"runtime"
-	"runtime/debug"
+	//"runtime"
+	//"runtime/debug"
 	"strings"
 	"time"
 )
@@ -385,8 +385,8 @@ func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
 	p.previousLine = currentLine
 	_ = command.Wait()
 	// 使用したメモリを開放してみる
-	runtime.GC()
-	debug.FreeOSMemory()
+	//runtime.GC()
+	//debug.FreeOSMemory()
 	// コンソールのカラーをもとにもどす
 	_, _ = os.Stdout.WriteString("\033[0m")
 	//debug.FreeOSMemory()
