@@ -19,14 +19,14 @@ import (
 
 // StandByInput 標準入力を待ち受ける関数
 func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool, error) {
-	processId := os.Getpid()
-	fmt.Println("------------------------------------------------")
-	fmt.Printf("Process Id: %v \n", processId)
-	fmt.Println("入力したコードの実行: Alt + Enter or Input `_` ")
-	fmt.Println("直前までの入力内容を確認: Input `cat` ")
-	fmt.Println("直前の入力を取り消す: Input `rollback` ")
-	fmt.Println("シェルを終了する: Input `exit` then `yes` ")
-	fmt.Println("------------------------------------------------")
+	//processId := os.Getpid()
+	//fmt.Println("------------------------------------------------")
+	//fmt.Printf("Process Id: %v \n", processId)
+	//fmt.Println("入力したコードの実行: Alt + Enter or Input `_` ")
+	//fmt.Println("直前までの入力内容を確認: Input `cat` ")
+	//fmt.Println("直前の入力を取り消す: Input `rollback` ")
+	//fmt.Println("シェルを終了する: Input `exit` then `yes` ")
+	//fmt.Println("------------------------------------------------")
 
 	// phpPathが未指定の場合はハイフンが設定されているため
 	// それ以外の場合は指定したphpパスで実行する
@@ -42,13 +42,13 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		"yes",
 	}
 
-	ngFileTemp, err := os.CreateTemp("", ".validation.dat.")
-	if err != nil {
-		panic(err)
-	}
-	// <?php を 一行目に書き込む
-	_, _ = ngFileTemp.Write([]byte("<?php " + "\n"))
-	ngFile := ngFileTemp.Name()
+	//ngFileTemp, err := os.CreateTemp("", ".validation.dat.")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//// <?php を 一行目に書き込む
+	//_, _ = ngFileTemp.Write([]byte("<?php " + "\n"))
+	//ngFile := ngFileTemp.Name()
 
 	// ----------------------------------------------
 	// 標準入力を可能にする
@@ -75,16 +75,16 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	var helpMessage = strings.Join(helpMessages, "\n")
 
 	var rawInputText string = ""
-	var counter int = 0
-	var mem runtime.MemStats
+	//var counter int = 0
+	//var mem runtime.MemStats
 	for {
-		counter++
-		func() {
-			runtime.ReadMemStats(&mem)
-			fmt.Println(mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
-		}()
-		php.SetNgFile(ngFile)
-		fmt.Print(config.ColorWrapping("0", prompt))
+		//counter++
+		//func() {
+		//	runtime.ReadMemStats(&mem)
+		//	fmt.Println(mem.Alloc, mem.TotalAlloc, mem.HeapAlloc, mem.HeapSys)
+		//}()
+		//php.SetNgFile(ngFile)
+		//fmt.Print(config.ColorWrapping("0", prompt))
 		if php.IsPermissibleError == true {
 			fmt.Print("\033[33m")
 			fmt.Print(config.ColorWrapping("33", prompt))
@@ -93,13 +93,14 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		var isExit int
 		// multiline-ny側で非同期実行するためにphpオブジェクトを渡す
 		rawInputText, isExit = wiredrawing.StdInput("", inputText, &php)
+		fmt.Printf("rawInputText: %v :", rawInputText)
 		if isExit == 1 {
 			continue
 		} else if isExit == 2 {
 			break
 		}
 
-		inputText = strings.TrimSpace(rawInputText)
+		inputText = strings.TrimRight(strings.TrimSpace(rawInputText), "\n")
 
 		if len(inputText) == 0 {
 			runtime.GC()
@@ -133,22 +134,22 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				}
 			}
 			cl := php.SetPreviousList(0)
-			_, _ = php.Execute(false, 1)
-			logs := php.Cat(1)
-			for index := range logs {
-				indexStr := fmt.Sprintf("%04d", logs[index]["id"])
-				fmt.Printf("%v[%s]: ", index+1, config.ColorWrapping("34", indexStr))
-				var statement string = (logs[index]["text"]).(string)
-				var _ []string = strings.Split(statement, "\n")
-				fmt.Println(config.ColorWrapping("32", statement))
-			}
+			_, _ = php.Execute(false)
+			//logs := php.Cat(1)
+			//for index := range logs {
+			//	indexStr := fmt.Sprintf("%04d", logs[index]["id"])
+			//	fmt.Printf("%v[%s]: ", index+1, config.ColorWrapping("34", indexStr))
+			//	var statement string = (logs[index]["text"]).(string)
+			//	var _ []string = strings.Split(statement, "\n")
+			//	fmt.Println(config.ColorWrapping("32", statement))
+			//}
 			php.SetPreviousList(cl)
 			continue
 		}
 
 		if inputText == "save" {
-			saveFileName = "save_" + fmt.Sprintf("%04d", counter) + ".php"
-			php.Save(saveFileName)
+			//saveFileName = "save_" + fmt.Sprintf("%04d", counter) + ".php"
+			//php.Save(saveFileName)
 			continue
 		}
 		if inputText == "exit" {
@@ -179,13 +180,13 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		// 入力内容が [clear] or [refresh] だった場合は入力内容をクリア
 		// ファイルサイズを空にする
 		if inputText == "clear" {
-			// バリデーション用のファイルを空にする
-			php.Clear()
-			// ただPHP開始タグのみ先頭に追記しておく
-			php.WriteToNg("<?php "+"\n", 1)
-			fmt.Print("\033[0m")
-			php.IsPermissibleError = false
-			prompt = fmt.Sprintf(" %s ", inputPrompt)
+			//// バリデーション用のファイルを空にする
+			//php.Clear()
+			//// ただPHP開始タグのみ先頭に追記しておく
+			//php.WriteToNg("<?php "+"\n", 1)
+			//fmt.Print("\033[0m")
+			//php.IsPermissibleError = false
+			//prompt = fmt.Sprintf(" %s ", inputPrompt)
 			runtime.GC()
 			debug.FreeOSMemory()
 			continue
@@ -193,16 +194,19 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 
 		// cat と入力すると現在まで入力している内容を出力する
 		if inputText == "cat" {
-			logs := php.Cat(1)
+			logs := php.Cat()
 			for index, log := range logs {
 				indexStr := fmt.Sprintf("%04d", index)
 				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
-				fmt.Println(config.ColorWrapping("32", (log["text"]).(string)))
+				text := log["text"].(string)
+				if len(text) > 0 {
+					fmt.Println(config.ColorWrapping("32", (log["text"]).(string)))
+				}
 			}
 			continue
 		}
 
-		php.WriteToNg(rawInputText+"\n", 1)
+		php.WriteToFile(rawInputText + "\n")
 		// ----------------------------------------------------------------
 		// Fatal Error以外を検出する
 		// ----------------------------------------------------------------
@@ -234,7 +238,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			continue
 		}
 
-		if outputSize, err := php.Execute(true, 1); err != nil {
+		if outputSize, err := php.Execute(true); err != nil {
 			fmt.Println(config.ColorWrapping("31", err.Error()))
 		} else {
 			if outputSize > 0 {

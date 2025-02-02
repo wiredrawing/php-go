@@ -3,10 +3,10 @@ package wiredrawing
 import (
 	"context"
 	"crypto/sha512"
-	"database/sql"
+	//"database/sql"
 	"errors"
 	"fmt"
-	_ "github.com/glebarez/go-sqlite"
+	//_ "github.com/glebarez/go-sqlite"
 	"github.com/hymkor/go-multiline-ny"
 	"github.com/mattn/go-colorable"
 	"github.com/nyaosorg/go-readline-ny"
@@ -118,7 +118,7 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 	ed.SetHistoryCycling(true)
 
 	for {
-		fmt.Print(`[0m`)
+		//fmt.Print(`[0m`)
 		lines, err := ed.Read(ctx)
 		if err != nil {
 			Catch(fmt.Fprintln(os.Stderr, err.Error()))
@@ -152,10 +152,11 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 		if strings.HasSuffix(result, "_") {
 			result = result[:len(result)-1]
 		}
-		// 第二引数は<0>
-		if len(result) > 0 {
-			p.WriteToDB(result, 0)
-		}
+		//// 第二引数は<0>
+		//if len(result) > 0 {
+		//	p.WriteToDB(result, 0)
+		//}
+		result = strings.TrimRight(result, "\n")
 		return result, 0
 	}
 }
@@ -169,26 +170,9 @@ type PHPExecuter struct {
 	previousLine       int
 	// アプリケーション起動時からの全エラーメッセージを保持する
 	wholeErrors []string
-	db          *sql.DB
-	hashKey     string
-}
-
-func (p *PHPExecuter) currentId() int {
-	var db *sql.DB = p.db
-	var currentId int = 0
-	tx, _ := db.Begin()
-	rows, _ := tx.Query("select max(id) from phptext where is_production = 1")
-	for rows.Next() {
-		err := rows.Scan(&currentId)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	err := tx.Commit()
-	if err != nil {
-		log.Fatal(err)
-	}
-	return currentId
+	//db              *sql.DB
+	fp            *os.File
+	writtenBuffer []byte
 }
 
 func (p *PHPExecuter) makeHashKey() string {
@@ -204,62 +188,26 @@ func (p *PHPExecuter) makeHashKey() string {
 	hashKey := fmt.Sprintf("%x", first.Sum(nil))
 	return hashKey
 }
-func (p *PHPExecuter) InitDB() *sql.DB {
+func (p *PHPExecuter) InitDB() {
 
-	p.hashKey = p.makeHashKey()
 	// sqliteの初期化R
 	path, err := os.UserHomeDir()
 	if err != nil {
 		log.Fatal(err)
 	}
-	var dbPath string = path + "/" + ".php.db"
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) != true {
-		_ = os.Remove(dbPath)
-	}
-	db, err := sql.Open("sqlite", dbPath)
-	p.db = db
-	if err != nil {
-		panic(err)
-	}
+	// 物理ファイルの生成
+	var physicalFile string = ".hidden.php"
+	var physicalPath = path + "/" + physicalFile
+	var physicalPointer *os.File = nil
+	var fileErr error = nil
+	physicalPointer, fileErr = os.Create(physicalPath)
+	Catch(fileErr)
+	p.fp = physicalPointer
+	// <?phpタグを記述
+	var e error = nil
+	_, _ = p.fp.WriteString("<?php" + "\n")
+	Catch(e)
 
-	createSql := `
-	create table phptext (
-	    id integer not null primary key autoincrement ,
-	    text text not null ,
-	    is_production int
-	)`
-	_, err = db.Exec(createSql)
-	Catch(err)
-
-	backUpTable := `
-		create table backup_phptext(
-		    id integer not null primary key  autoincrement,
-		    phptext_id integer not null,
-		    text text not null,
-		    created_at datetime not null DEFAULT (DATETIME('now', 'localtime')),
-		    key text not null
-		)
-	`
-	_, err = db.Exec(backUpTable)
-	Catch(err)
-
-	// 実行結果を格納するテーブルを作成
-	var sql string = `
-		create table results (
-		    id integer not null primary key autoincrement,
-		    result text not null,
-		    phptext_id integer not null
-		)`
-	// Make a table to save executed result.
-	_, err = db.Exec(sql)
-	if err != nil {
-		log.Fatal(err)
-	}
-	tx, _ := db.Begin()
-	st, _ := db.Prepare("insert into phptext(text, is_production) values (?, ?)")
-	st.Exec("<?php", 1)
-	tx.Commit()
-	return db
 }
 
 // WholeErrors ----------------------------------------
@@ -273,24 +221,16 @@ func (p *PHPExecuter) ResetWholeErrors() {
 	p.wholeErrors = []string{}
 }
 
-func (p *PHPExecuter) Cat(isProd int) []map[string]interface{} {
-	db := p.db
-	statement, err := db.Prepare("select id, text from phptext where is_production = ? order by id asc")
-	if err != nil {
-		log.Fatal(err)
-	}
-	rows, _ := statement.Query(isProd)
+func (p *PHPExecuter) Cat() []map[string]interface{} {
 	var logs []map[string]interface{}
-	for rows.Next() {
-		var id int
-		var text string
-		err := rows.Scan(&id, &text)
-		if err != nil {
-			log.Fatal(err)
-		}
+	var f []byte
+	_, _ = p.fp.Seek(0, 0)
+	f, _ = io.ReadAll(p.fp)
+	var sliced []string = strings.Split(string(f), "\n")
+	for k, v := range sliced {
 		var tempMap map[string]interface{} = map[string]interface{}{
-			"id":   id,
-			"text": text,
+			"id":   k,
+			"text": v,
 		}
 		logs = append(logs, tempMap)
 	}
@@ -315,19 +255,20 @@ func (p *PHPExecuter) SetPhpExcutePath(phpPath string) {
 	p.PhpPath = phpPath
 }
 
-func (p *PHPExecuter) Execute(showBuffer bool, isProd int) (int, error) {
-	logs := p.Cat(isProd)
-	phpLogs := ""
-	for index := range logs {
-		phpLogs += logs[index]["text"].(string) + "\n"
-	}
-	fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
-	Catch(fp.Truncate(0))
-	Catch(fp.Seek(0, 0))
-	Catch(fp.WriteString(phpLogs))
+func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
+	//logs := p.Cat(isProd)
+	//phpLogs := ""
+	//for index := range logs {
+	//	phpLogs += logs[index]["text"].(string) + "\n"
+	//}
+	//fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
+	//Catch(fp.Truncate(0))
+	//Catch(fp.Seek(0, 0))
+	//Catch(fp.WriteString(phpLogs))
 	var colorCode string = config.Blue
 
-	command := exec.Command(p.PhpPath, fp.Name())
+	//command := exec.Command(p.PhpPath, fp.Name())
+	command := exec.Command(p.PhpPath, p.fp.Name())
 
 	buffer, err := command.StdoutPipe()
 	if err != nil {
@@ -416,18 +357,8 @@ func (p *PHPExecuter) DetectFatalError(isProd int) (bool, error) {
 	const ParseErrorString = `PHP[ ]+?Parse[ ]+?error:[ ]+?`
 	var parseErrorRegex = regexp.MustCompile(ParseErrorString)
 	p.IsPermissibleError = false
-
-	logs := p.Cat(isProd)
-	phpLogs := ""
-	for index := range logs {
-		phpLogs += logs[index]["text"].(string) + "\n"
-	}
-	fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
-	Catch(fp.Truncate(0))
-	Catch(fp.Seek(0, 0))
-	Catch(fp.WriteString(phpLogs))
 	// 終了コードが不正な場合,FatalErrorを取得する
-	c := exec.Command(p.PhpPath, fp.Name())
+	c := exec.Command(p.PhpPath, p.fp.Name())
 	buffer, err := c.StderrPipe()
 	if err != nil {
 		fmt.Printf("err in DetectFatalError: %v\n", err)
@@ -471,18 +402,18 @@ func (p *PHPExecuter) DetectFatalError(isProd int) (bool, error) {
 	return true, nil
 }
 
-func (p *PHPExecuter) DetectErrorExceptFatalError() ([]byte, error) {
-	c := exec.Command(p.PhpPath, p.ngFile)
-	buffer, err := c.StderrPipe()
-	if err != nil {
-		return []byte{}, err
-	}
-	_ = c.Start()
-	loadedByte, err := io.ReadAll(buffer)
-	//loadedByte, err := ioutil.ReadAll(buffer)
-	_ = c.Wait()
-	return loadedByte, nil
-}
+//func (p *PHPExecuter) DetectErrorExceptFatalError() ([]byte, error) {
+//	c := exec.Command(p.PhpPath, p.ngFile)
+//	buffer, err := c.StderrPipe()
+//	if err != nil {
+//		return []byte{}, err
+//	}
+//	_ = c.Start()
+//	loadedByte, err := io.ReadAll(buffer)
+//	//loadedByte, err := ioutil.ReadAll(buffer)
+//	_ = c.Wait()
+//	return loadedByte, nil
+//}
 
 func (p *PHPExecuter) SetNgFile(ngFile string) {
 	if p.ngFile == "" {
@@ -491,116 +422,23 @@ func (p *PHPExecuter) SetNgFile(ngFile string) {
 }
 
 // WriteToDB 指定したテキストをSqliteに書き込む
-func (p *PHPExecuter) WriteToDB(input string, isProduction int) int64 {
-	// sqliteへ書き込む
-	tx, _ := p.db.Begin()
-	st, err := tx.Prepare("insert into phptext(text, is_production) values (?, ?)")
-	if err != nil {
-		panic(err)
-	}
-	if int(input[0]) == 27 {
-		tx.Rollback()
-		return 0
-	}
-	// 取得したnextID, 本文, 実行するタイミング
-	cleansing := strings.TrimRight(input, "\r\n ")
-	result, _ := st.Exec(cleansing, isProduction)
-	latestId, err := result.LastInsertId()
-	err = tx.Commit()
-	if err != nil {
-		panic(err)
-	}
-	return latestId
-}
-
-func (p *PHPExecuter) WriteToNg(input string, isProd int) int64 {
-	latestId := p.WriteToDB(input, isProd)
-	return latestId
-}
-
-func (p *PHPExecuter) Save(saveFileName string) bool {
-	current := make([]PHPSource, 0, 64)
-	sql := `
-		select id, text from phptext where is_production = 1 order  by id asc
-		`
-	tx, err := p.db.Begin()
-	Catch(err)
-	rows, err := tx.Query(sql)
-	Catch(err)
-	var sourceText string = ""
-	var sourceId int = 0
-	currentConnected := ""
-	for rows.Next() {
-		Catch(rows.Scan(&sourceId, &sourceText))
-		currentConnected += sourceText + "\n"
-		current = append(current, PHPSource{text: sourceText, sourceId: sourceId})
-	}
-
-	//fmt.Printf("current => %v", current)
-	// 保存のたびにハッシュキーを計算
-	p.hashKey = p.makeHashKey()
-	for _, row := range current {
-		sql := "insert into backup_phptext (phptext_id, text, key) values(? ,?, ?)"
-		statement, err := tx.Prepare(sql)
-		Catch(err)
-		_, err = statement.Exec(row.sourceId, row.text, p.hashKey)
-		Catch(err)
-	}
-	Catch(tx.Commit())
-	// バックアップ用ファイルを作成する
-	wd, _ := os.Getwd()
-	if saveFileName == "" {
-		saveFileName = "save.php"
-	} else {
-		saveFileName = wd + "/" + saveFileName
-	}
-	if _, err := os.Stat(saveFileName); os.IsNotExist(err) != true {
-		_ = os.Remove(saveFileName)
-	}
-	des, err := os.OpenFile(saveFileName, os.O_CREATE|os.O_RDWR, 0777)
-	Catch(err)
-	_, err = des.WriteString(currentConnected)
-	Catch(err)
-	defer (func() {
-		_ = des.Close()
-	})()
-	return true
+func (p *PHPExecuter) WriteToFile(input string) int {
+	var size int
+	// 追記前に直前の入力内容を保存
+	p.fp.Seek(0, 0)
+	p.writtenBuffer, _ = io.ReadAll(p.fp)
+	// 物理ファイルに書き込む
+	_, _ = p.fp.Seek(0, io.SeekEnd)
+	size, _ = p.fp.WriteString(input)
+	return size
 }
 
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
 func (p *PHPExecuter) Rollback() bool {
-	var db *sql.DB = p.db
-	var err error = nil
-	tx, _ := db.Begin()
-	rows, _ := tx.Query("select count(id) from phptext where is_production = 1")
-
-	var surplus int
-	for rows.Next() {
-		Catch(rows.Scan(&surplus))
-	}
-	if surplus > 1 {
-		statment, _ := tx.Prepare("delete from phptext where id = ?")
-		_, _ = statment.Exec(p.currentId())
-		err = tx.Commit()
-		if err != nil {
-			log.Fatal(err)
-		}
-		return true
-	}
-	_ = tx.Commit()
+	// 前回入力時直前まで入力してた内容を取得する
+	p.fp.Seek(0, 0)
+	p.fp.Truncate(0)
+	p.fp.Write(p.writtenBuffer)
 	return false
-}
-func (p *PHPExecuter) Clear() bool {
-	var db = p.db
-
-	tx, _ := db.Begin()
-	result, err := tx.Exec("delete from phptext")
-	if err != nil {
-		return false
-	}
-	affectedNum, _ := result.RowsAffected()
-	fmt.Printf("Deleted %v records.", affectedNum)
-	tx.Commit()
-	return true
 }
