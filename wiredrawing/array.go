@@ -2,7 +2,6 @@ package wiredrawing
 
 import (
 	"context"
-	"crypto/sha512"
 	//"database/sql"
 	"errors"
 	"fmt"
@@ -14,7 +13,6 @@ import (
 	"github.com/nyaosorg/go-readline-ny/simplehistory"
 	"io"
 	"log"
-	"math/rand"
 	"os"
 	"os/exec"
 	"phpgo/config"
@@ -23,7 +21,6 @@ import (
 	//"runtime"
 	//"runtime/debug"
 	"strings"
-	"time"
 )
 
 type PHPSource struct {
@@ -172,24 +169,11 @@ type PHPExecuter struct {
 	wholeErrors []string
 	//db              *sql.DB
 	fp            *os.File
-	writtenBuffer []byte
+	writtenBuffer [][]byte
 }
 
-func (p *PHPExecuter) makeHashKey() string {
-	var today time.Time = time.Now()
-	// 保存用のハッシュを作詞絵
-	rand.Seed(today.Unix())
-	var source []byte = make([]byte, 256)
-	for i := 0; i < 256; i++ {
-		source[i] = byte(rand.Intn(255))
-	}
-	first := sha512.New()
-	first.Write(source)
-	hashKey := fmt.Sprintf("%x", first.Sum(nil))
-	return hashKey
-}
 func (p *PHPExecuter) InitDB() {
-
+	const InitialInput = "<?php" + "\n"
 	// sqliteの初期化R
 	path, err := os.UserHomeDir()
 	if err != nil {
@@ -207,7 +191,8 @@ func (p *PHPExecuter) InitDB() {
 	var e error = nil
 	_, _ = p.fp.WriteString("<?php" + "\n")
 	Catch(e)
-
+	p.writtenBuffer = make([][]byte, 0)
+	p.writtenBuffer = append(p.writtenBuffer, []byte(InitialInput))
 }
 
 // WholeErrors ----------------------------------------
@@ -415,18 +400,18 @@ func (p *PHPExecuter) DetectFatalError(isProd int) (bool, error) {
 //	return loadedByte, nil
 //}
 
-func (p *PHPExecuter) SetNgFile(ngFile string) {
-	if p.ngFile == "" {
-		p.ngFile = ngFile
-	}
-}
+//func (p *PHPExecuter) SetNgFile(ngFile string) {
+//	if p.ngFile == "" {
+//		p.ngFile = ngFile
+//	}
+//}
 
 // WriteToDB 指定したテキストをSqliteに書き込む
 func (p *PHPExecuter) WriteToFile(input string) int {
 	var size int
 	// 追記前に直前の入力内容を保存
 	p.fp.Seek(0, 0)
-	p.writtenBuffer, _ = io.ReadAll(p.fp)
+	p.writtenBuffer = append(p.writtenBuffer, []byte(input))
 	// 物理ファイルに書き込む
 	_, _ = p.fp.Seek(0, io.SeekEnd)
 	size, _ = p.fp.WriteString(input)
@@ -436,9 +421,18 @@ func (p *PHPExecuter) WriteToFile(input string) int {
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
 func (p *PHPExecuter) Rollback() bool {
-	// 前回入力時直前まで入力してた内容を取得する
-	p.fp.Seek(0, 0)
-	p.fp.Truncate(0)
-	p.fp.Write(p.writtenBuffer)
+	var temp []byte = make([]byte, 1024)
+	// バッファのrollbackは<?phpを削除しないようにする
+	if len(p.writtenBuffer) > 1 {
+		p.writtenBuffer = p.writtenBuffer[:len(p.writtenBuffer)-1]
+		for _, v := range p.writtenBuffer {
+			temp = append(temp, v...)
+		}
+		// 前回入力時直前まで入力してた内容を取得する
+		p.fp.Seek(0, 0)
+		p.fp.Truncate(0)
+		p.fp.Write(temp)
+	}
+
 	return false
 }

@@ -93,7 +93,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		var isExit int
 		// multiline-ny側で非同期実行するためにphpオブジェクトを渡す
 		rawInputText, isExit = wiredrawing.StdInput("", inputText, &php)
-		fmt.Printf("rawInputText: %v :", rawInputText)
+		//fmt.Printf("rawInputText: %v :", rawInputText)
 		if isExit == 1 {
 			continue
 		} else if isExit == 2 {
@@ -196,11 +196,14 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		if inputText == "cat" {
 			logs := php.Cat()
 			for index, log := range logs {
+				text := log["text"].(string)
+				if len(text) == 0 {
+					continue
+				}
 				indexStr := fmt.Sprintf("%04d", index)
 				fmt.Print(config.ColorWrapping("34", indexStr) + ": ")
-				text := log["text"].(string)
 				if len(text) > 0 {
-					fmt.Println(config.ColorWrapping("32", (log["text"]).(string)))
+					fmt.Println(config.ColorWrapping("32", text))
 				}
 			}
 			continue
