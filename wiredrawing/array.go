@@ -170,6 +170,7 @@ type PHPExecuter struct {
 	//db              *sql.DB
 	fp            *os.File
 	writtenBuffer [][]byte
+	physicalPath  string
 }
 
 func (p *PHPExecuter) InitDB() {
@@ -184,12 +185,14 @@ func (p *PHPExecuter) InitDB() {
 	var physicalPath = path + "/" + physicalFile
 	var physicalPointer *os.File = nil
 	var fileErr error = nil
+	p.physicalPath = physicalPath
 	physicalPointer, fileErr = os.Create(physicalPath)
 	Catch(fileErr)
 	p.fp = physicalPointer
 	// <?phpタグを記述
 	var e error = nil
 	_, _ = p.fp.WriteString("<?php" + "\n")
+	p.fp.Close()
 	Catch(e)
 	p.writtenBuffer = make([][]byte, 0)
 	p.writtenBuffer = append(p.writtenBuffer, []byte(InitialInput))
@@ -209,6 +212,7 @@ func (p *PHPExecuter) ResetWholeErrors() {
 func (p *PHPExecuter) Cat() []map[string]interface{} {
 	var logs []map[string]interface{}
 	var f []byte
+	p.fp, _ = os.OpenFile(p.physicalPath, os.O_RDWR|os.O_CREATE, 0777)
 	_, _ = p.fp.Seek(0, 0)
 	f, _ = io.ReadAll(p.fp)
 	var sliced []string = strings.Split(string(f), "\n")
@@ -219,6 +223,7 @@ func (p *PHPExecuter) Cat() []map[string]interface{} {
 		}
 		logs = append(logs, tempMap)
 	}
+	p.fp.Close()
 	return logs
 }
 
@@ -324,7 +329,7 @@ func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
 
 // DetectFatalError ----------------------------------------
 // 事前にPHPの実行結果がエラーであるかどうかを判定する
-func (p *PHPExecuter) DetectFatalError(isProd int) (bool, error) {
+func (p *PHPExecuter) DetectFatalError() (bool, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -409,19 +414,22 @@ func (p *PHPExecuter) DetectFatalError(isProd int) (bool, error) {
 // WriteToDB 指定したテキストをSqliteに書き込む
 func (p *PHPExecuter) WriteToFile(input string) int {
 	var size int
+	p.fp, _ = os.OpenFile(p.physicalPath, os.O_RDWR|os.O_CREATE, 0777)
 	// 追記前に直前の入力内容を保存
 	p.fp.Seek(0, 0)
 	p.writtenBuffer = append(p.writtenBuffer, []byte(input))
 	// 物理ファイルに書き込む
 	_, _ = p.fp.Seek(0, io.SeekEnd)
 	size, _ = p.fp.WriteString(input)
+	p.fp.Close()
 	return size
 }
 
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
-func (p *PHPExecuter) Rollback() bool {
+func (p *PHPExecuter) Rollback() int {
 	var temp []byte = make([]byte, 1024)
+	p.fp, _ = os.OpenFile(p.physicalPath, os.O_RDWR|os.O_CREATE, 0777)
 	// バッファのrollbackは<?phpを削除しないようにする
 	if len(p.writtenBuffer) > 1 {
 		p.writtenBuffer = p.writtenBuffer[:len(p.writtenBuffer)-1]
@@ -433,6 +441,6 @@ func (p *PHPExecuter) Rollback() bool {
 		p.fp.Truncate(0)
 		p.fp.Write(temp)
 	}
-
-	return false
+	p.fp.Close()
+	return len(p.writtenBuffer)
 }

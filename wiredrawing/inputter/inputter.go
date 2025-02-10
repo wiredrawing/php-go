@@ -121,19 +121,19 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			php.ResetWholeErrors()
 			continue
 		} else if inputText == "rollback" {
-			php.Rollback()
-			isFatal, _ := php.DetectFatalError(1)
-			errorBuffer := php.ErrorBuffer
-			if isFatal == true {
-				prompt = " ... "
-			} else {
-				if len(errorBuffer) > 0 {
-					prompt = " ... "
-				} else {
-					prompt = " " + (inputPrompt) + " "
-				}
-			}
-			cl := php.SetPreviousList(0)
+			_ = php.Rollback()
+			//isFatal, _ := php.DetectFatalError()
+			//errorBuffer := php.ErrorBuffer
+			//if isFatal == true {
+			//	prompt = " ... "
+			//} else {
+			//	if len(errorBuffer) > 0 {
+			//		prompt = " ... "
+			//	} else {
+			//		prompt = " " + (inputPrompt) + " "
+			//	}
+			//}
+			_ = php.SetPreviousList(0)
 			_, _ = php.Execute(false)
 			//logs := php.Cat(1)
 			//for index := range logs {
@@ -143,7 +143,12 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			//	var _ []string = strings.Split(statement, "\n")
 			//	fmt.Println(config.ColorWrapping("32", statement))
 			//}
-			php.SetPreviousList(cl)
+			//if rows == 1 {
+			//	php.SetPreviousList(0)
+			//} else {
+			//	php.SetPreviousList(cl)
+			//}
+
 			continue
 		}
 
@@ -213,7 +218,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 		// ----------------------------------------------------------------
 		// Fatal Error以外を検出する
 		// ----------------------------------------------------------------
-		isFatal, err := php.DetectFatalError(1)
+		isFatal, err := php.DetectFatalError()
 		if err != nil {
 			panic(err)
 		}
@@ -250,6 +255,7 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				fmt.Print(config.ColorWrapping("0", ""))
 			}
 		}
+		//fmt.Printf("\ngetpreviouslist %s \n", php.GetPreviousList())
 		inputText = ""
 		prompt = fmt.Sprintf(" %s ", inputPrompt)
 		continue
