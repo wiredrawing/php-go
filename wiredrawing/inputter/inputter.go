@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"phpgo/config"
+	. "phpgo/errorhandler"
 	"phpgo/wiredrawing"
 	"runtime"
-
 	//"runtime"
 	"runtime/debug"
 	"strings"
@@ -65,6 +65,8 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 	php.InitDB()
 
 	// ヘルプメッセージを定義
+	// make([]byte, 8) => [0, 0, 0, 0, 0, 0, 0, 0, ] となる
+	// make([]byte, 0, 8) => [] (cap => 8)となる
 	var helpMessages = make([]string, 0, 32)
 	helpMessages = append(helpMessages, fmt.Sprintf("[help]"))
 	helpMessages = append(helpMessages, fmt.Sprintf("clear:    入力途中の内容を破棄します."))
@@ -133,8 +135,14 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 			//		prompt = " " + (inputPrompt) + " "
 			//	}
 			//}
-			_ = php.SetPreviousList(0)
-			_, _ = php.Execute(false)
+			previousLine := php.SetPreviousList(0)
+			fmt.Printf("previousLine %v", previousLine)
+			_, e := php.Execute(false)
+			if e != nil {
+				Catch(e)
+			}
+			//fmt.Printf("outputsize %v", output)
+			//fmt.Printf("\ngetpreviouslist %v \n", php.GetPreviousList())
 			//logs := php.Cat(1)
 			//for index := range logs {
 			//	indexStr := fmt.Sprintf("%04d", logs[index]["id"])
@@ -255,7 +263,6 @@ func StandByInput(phpPath string, inputPrompt string, saveFileName string) (bool
 				fmt.Print(config.ColorWrapping("0", ""))
 			}
 		}
-		//fmt.Printf("\ngetpreviouslist %s \n", php.GetPreviousList())
 		inputText = ""
 		prompt = fmt.Sprintf(" %s ", inputPrompt)
 		continue

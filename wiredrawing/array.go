@@ -235,8 +235,7 @@ func (p *PHPExecuter) SetPreviousList(number int) int {
 	return currenetLine
 }
 func (p *PHPExecuter) GetPreviousList() int {
-	var currenetLine int = p.previousLine
-	return currenetLine
+	return p.previousLine
 }
 func (p *PHPExecuter) SetPhpExcutePath(phpPath string) {
 	if phpPath == "" {
@@ -246,18 +245,6 @@ func (p *PHPExecuter) SetPhpExcutePath(phpPath string) {
 }
 
 func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
-	//logs := p.Cat(isProd)
-	//phpLogs := ""
-	//for index := range logs {
-	//	phpLogs += logs[index]["text"].(string) + "\n"
-	//}
-	//fp, _ := os.OpenFile(p.ngFile, os.O_RDWR, 0777)
-	//Catch(fp.Truncate(0))
-	//Catch(fp.Seek(0, 0))
-	//Catch(fp.WriteString(phpLogs))
-	var colorCode string = config.Blue
-
-	//command := exec.Command(p.PhpPath, fp.Name())
 	command := exec.Command(p.PhpPath, p.fp.Name())
 
 	buffer, err := command.StdoutPipe()
@@ -274,8 +261,8 @@ func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
 
 	currentLine = 0
 	var outputSize int = 0
-	fmt.Print("\033[0m")
-	_, _ = os.Stdout.WriteString("\033[" + colorCode + "m")
+
+	fmt.Print("\033[" + config.Blue + "m")
 	for {
 		readData := make([]byte, ensureLength)
 		n, err := buffer.Read(readData)
@@ -289,6 +276,7 @@ func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
 			break
 		}
 		// 正味のバッファを取り出す
+		//fmt.Printf("\r readData => %v \n", readData)
 		readData = readData[:n]
 
 		from := currentLine
@@ -428,7 +416,7 @@ func (p *PHPExecuter) WriteToFile(input string) int {
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
 func (p *PHPExecuter) Rollback() int {
-	var temp []byte = make([]byte, 1024)
+	var temp []byte = make([]byte, 0, 1024)
 	p.fp, _ = os.OpenFile(p.physicalPath, os.O_RDWR|os.O_CREATE, 0777)
 	// バッファのrollbackは<?phpを削除しないようにする
 	if len(p.writtenBuffer) > 1 {
