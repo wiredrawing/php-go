@@ -307,8 +307,7 @@ func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
 	//runtime.GC()
 	//debug.FreeOSMemory()
 	// コンソールのカラーをもとにもどす
-	_, _ = os.Stdout.WriteString("\033[0m")
-	//debug.FreeOSMemory()
+	fmt.Printf("\033[0m")
 	p.ErrorBuffer = []byte{}
 	//// 再度新規pointerとしてokFileFpを開く
 	//pe.okFileFp, err = os.OpenFile(pe.okFile, os.O_RDWR, 0777)
