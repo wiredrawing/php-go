@@ -83,28 +83,44 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
 		// strip input text.
-		var replaceLines []string
-		for _, v := range lines {
-			stripV := strings.TrimSpace(v)
-			if len(stripV) == 0 {
-				continue
+		var replaceLines []string = make([]string, len(lines))
+		for i := len(lines) - 1; i >= 0; i-- {
+			replaceLines[i] = lines[i]
+		}
+		var lineFeed int = 0
+		for _, v := range replaceLines {
+			// 最後の行が指定された値で終わっている場合はtrueを返却する
+			if InArray(v, worsToExis) {
+				return true
 			}
-			replaceLines = append(replaceLines, stripV)
-		}
-		if len(replaceLines) == 0 {
-			return false
-		}
-		// 最後の行が指定された値で終わっている場合はtrueを返却する
-		var f string = replaceLines[len(replaceLines)-1]
-		if InArray(f, worsToExis) {
-			return true
-		}
-		connected := strings.Join(replaceLines, "")
-		// 入力内容の末尾が_(アンダースコア)で完了している場合はtrueを返却
-		if strings.HasSuffix(connected, "_") {
-			return true
+			if v == "" {
+				lineFeed++
+			} else {
+				lineFeed = 0
+			}
+			if lineFeed >= 2 {
+				return true
+			}
+			//if len(stripV) == 0 {
+			//	continue
+			//}
+			//replaceLines = append(replaceLines, stripV)
 		}
 		return false
+		//if len(replaceLines) == 0 {
+		//	return false
+		//}
+		//// 最後の行が指定された値で終わっている場合はtrueを返却する
+		//var f string = replaceLines[len(replaceLines)-1]
+		//if InArray(f, worsToExis) {
+		//	return true
+		//}
+		//connected := strings.Join(replaceLines, "")
+		//// 入力内容の末尾が_(アンダースコア)で完了している場合はtrueを返却
+		//if strings.HasSuffix(connected, "_") {
+		//	return true
+		//}
+		//return false
 	})
 	// To enable escape sequence on Windows.
 	// (On other operating systems, it can be ommited)
