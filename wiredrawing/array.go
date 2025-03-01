@@ -47,7 +47,7 @@ func InArray(needle string, haystack []string) bool {
 
 var ed multiline.Editor
 
-var worsToExis []string = []string{
+var worsToExis = []string{
 	"exit",
 	"cat",
 	"yes",
@@ -83,28 +83,25 @@ func StdInput(prompt string, previousInput string, p *PHPExecuter) (string, int)
 	})
 	ed.SubmitOnEnterWhen(func(lines []string, index int) bool {
 		// strip input text.
-		var replaceLines []string = make([]string, len(lines))
+		var lineFeed = 0
+		var c = 0
 		for i := len(lines) - 1; i >= 0; i-- {
-			replaceLines[i] = lines[i]
-		}
-		var lineFeed int = 0
-		for _, v := range replaceLines {
-			// 最後の行が指定された値で終わっている場合はtrueを返却する
-			if InArray(v, worsToExis) {
-				return true
+			if i == len(lines)-1 {
+				if InArray(lines[i], worsToExis) {
+					return true
+				}
 			}
-			if v == "" {
-				lineFeed++
-			} else {
-				lineFeed = 0
+			if c < 2 {
+				if lines[i] == "" {
+					lineFeed++
+				} else {
+					lineFeed = 0
+				}
+				if lineFeed >= 2 {
+					return true
+				}
 			}
-			if lineFeed >= 2 {
-				return true
-			}
-			//if len(stripV) == 0 {
-			//	continue
-			//}
-			//replaceLines = append(replaceLines, stripV)
+			c++
 		}
 		return false
 		//if len(replaceLines) == 0 {
@@ -197,7 +194,7 @@ func (p *PHPExecuter) InitDB() {
 		log.Fatal(err)
 	}
 	// 物理ファイルの生成
-	var physicalFile string = ".hidden.php"
+	var physicalFile = ".hidden.php"
 	var physicalPath = path + "/" + physicalFile
 	var physicalPointer *os.File = nil
 	var fileErr error = nil
@@ -231,9 +228,9 @@ func (p *PHPExecuter) Cat() []map[string]interface{} {
 	p.fp, _ = os.OpenFile(p.physicalPath, os.O_RDWR|os.O_CREATE, 0777)
 	_, _ = p.fp.Seek(0, 0)
 	f, _ = io.ReadAll(p.fp)
-	var sliced []string = strings.Split(string(f), "\n")
+	var sliced = strings.Split(string(f), "\n")
 	for k, v := range sliced {
-		var tempMap map[string]interface{} = map[string]interface{}{
+		var tempMap = map[string]interface{}{
 			"id":   k,
 			"text": v,
 		}
@@ -246,7 +243,7 @@ func (p *PHPExecuter) Cat() []map[string]interface{} {
 // SetPreviousList ----------------------------------------
 // 前回のセーブポイントを変更する
 func (p *PHPExecuter) SetPreviousList(number int) int {
-	var currenetLine int = p.previousLine
+	var currenetLine = p.previousLine
 	p.previousLine = number
 	return currenetLine
 }
@@ -276,7 +273,7 @@ func (p *PHPExecuter) Execute(showBuffer bool) (int, error) {
 	const ensureLength int = 4096
 
 	currentLine = 0
-	var outputSize int = 0
+	var outputSize = 0
 
 	fmt.Print("\033[" + config.Blue + "m")
 	for {
@@ -431,7 +428,7 @@ func (p *PHPExecuter) WriteToFile(input string) int {
 // Rollback ----------------------------------------
 // OkFileの中身をNgFileまるっとコピーする
 func (p *PHPExecuter) Rollback() int {
-	var temp []byte = make([]byte, 0, 1024)
+	var temp = make([]byte, 0, 1024)
 	p.fp, _ = os.OpenFile(p.physicalPath, os.O_RDWR|os.O_CREATE, 0777)
 	// バッファのrollbackは<?phpを削除しないようにする
 	if len(p.writtenBuffer) > 1 {
