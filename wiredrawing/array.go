@@ -204,8 +204,9 @@ func (p *PHPExecuter) InitDB() {
 	p.fp = physicalPointer
 	// <?phpタグを記述
 	var e error = nil
-	_, _ = p.fp.WriteString("<?php" + "\n")
-	p.fp.Close()
+	_, e = p.fp.WriteString("<?php" + "\n")
+	Catch(e)
+	e = p.fp.Close()
 	Catch(e)
 	p.writtenBuffer = make([][]byte, 0)
 	p.writtenBuffer = append(p.writtenBuffer, []byte(InitialInput))
